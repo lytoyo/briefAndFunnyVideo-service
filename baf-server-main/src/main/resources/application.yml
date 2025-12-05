@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: baf-server-admin
+  profiles:
+    active: @activatedProperties@
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.lytoyo: debug
+
+
