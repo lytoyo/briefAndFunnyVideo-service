@@ -1,9 +1,24 @@
 spring:
+  elasticsearch:
+    rest:
+      uris: 192.168.200.136:9200
+      connection-timeout: 30s
+      read-timeout: 30s
+  rabbitmq:
+    host: 192.168.200.136
+    port: 5672
+    username: admin
+    password: admin
+    virtual-host: /
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password: 123456
-    url: jdbc:mysql://192.168.200.136:3306/baf?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://192.168.200.136:3306/baf?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
@@ -45,3 +60,11 @@ jwt:
   secret: OASNDASINQWMEAOSCNK
   expiration: 86400000
   issuer: lytoyo
+
+minio:
+  endpoint: http://192.168.200.136:9000
+  bucketName: baf
+  accessKey: vQulpsLrq2qCy5orxttx
+  secretKey: gtiiFqg3qyuYj1yU8F8zPSeozIzNWmIHt6rjzRVy
+  secure: false
+  url: http://192.168.200.136:9000/baf/

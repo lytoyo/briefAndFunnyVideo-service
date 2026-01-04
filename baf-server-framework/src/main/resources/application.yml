@@ -1,0 +1,6 @@
+minio:
+  endpoint: http://192.168.200.136:9000
+  bucketName: baf
+  accessKey: vQulpsLrq2qCy5orxttx
+  secretKey: gtiiFqg3qyuYj1yU8F8zPSeozIzNWmIHt6rjzRVy
+  secure: false

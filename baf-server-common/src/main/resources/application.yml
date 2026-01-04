@@ -1,8 +1,5 @@
 spring:
   application:
     name: baf-server-common
-jwt:
-  secret: OASNDASINQWMEAOSCNK
-  expiration: 86400000
-  issuer: lytoyo
+
 

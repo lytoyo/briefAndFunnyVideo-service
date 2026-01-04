@@ -19,9 +19,6 @@
 
     <modules>
         <module>baf-server-main</module>
-        <module>baf-server-common</module>
-        <module>baf-server-framework</module>
-        <module>baf-server-system</module>
     </modules>
 
     <properties>
@@ -38,22 +35,19 @@
         <jwt.version>0.12.6</jwt.version>
         <mail.version>1.6.2</mail.version>
         <mybatis.version>3.0.3</mybatis.version>
-
+        <minio.version>8.2.0</minio.version>
+        <elasticsearch.version>7.15.2</elasticsearch.version>
         <activatedProperties>dev</activatedProperties>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-
-
-
             <!-- 数据库 -->
             <dependency>
                 <groupId>mysql</groupId>
                 <artifactId>mysql-connector-java</artifactId>
                 <version>${mysql.version}</version>
             </dependency>
-
 
             <!-- MyBatis Plus -->
             <dependency>
@@ -71,6 +65,12 @@
             </dependency>
 
             <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio.version}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-all</artifactId>
                 <version>${hutool.version}</version>
@@ -81,7 +81,6 @@
                 <artifactId>fastjson2</artifactId>
                 <version>${fastjson.version}</version>
             </dependency>
-
 
             <dependency>
                 <groupId>org.mybatis.spring.boot</groupId>
@@ -100,18 +99,25 @@
                 <artifactId>jjwt-api</artifactId>
                 <version>${jwt.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-impl</artifactId>
                 <version>${jwt.version}</version>
                 <scope>runtime</scope>
             </dependency>
+
             <dependency>
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-gson</artifactId>
                 <version>${jwt.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.elasticsearch.client</groupId>
+                <artifactId>elasticsearch-rest-high-level-client</artifactId>
+                <version>${elasticsearch.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
