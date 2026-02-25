@@ -30,4 +30,11 @@ public interface SystemService {
      * @return
      */
     Result login(User user);
+
+    /**
+     * 退出登录
+     * @param userId
+     * @return
+     */
+    Result logoff(Long userId);
 }

@@ -41,12 +41,10 @@ public class FileMessageLister {
     /**
      * 删除文件分片
      * @param dataString
-     * @param message
-     * @param channel
      */
     @RabbitListener(bindings = @QueueBinding(value = @Queue(durable = "true", value = "queue.baf.file"),
             exchange = @Exchange(value = "exchange.direct.baf"), key = {"routing.baf.file"}))
-    public void fileProcessMessage(Map<String, Object> dataString, Message message, Channel channel) {
+    public void fileProcessMessage(Map<String, Object> dataString) {
         String md5 = (String) dataString.get("md5");
         Integer chunkCount = (Integer) dataString.get("chunkCount");
         try {

@@ -4,7 +4,7 @@ import java.lang.annotation.*;
 
 /**
  * Package:com.lytoyo.framework.aspectj
- *
+ * 日志注解
  * @ClassName:SysLog
  * @Create:2025/12/4 15:45
  **/
@@ -15,4 +15,6 @@ public @interface SysLog {
     String value() default "";
 
     boolean require() default true;
+
+    boolean needLogin() default true;
 }

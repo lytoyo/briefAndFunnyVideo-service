@@ -1,8 +1,7 @@
 package com.lytoyo.common.utils;
 
 import com.lytoyo.common.domain.Blog;
-import com.lytoyo.common.domain.FileInfo;
-import org.springframework.amqp.core.MessageProperties;
+import com.lytoyo.common.domain.User;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
@@ -30,16 +29,14 @@ public class RabbitMqUtil {
         rabbitTemplate.convertAndSend(exchange,routingKey,data);
     }
 
-    public void sendBlogUpElasticsearch(String exchange, String routingKey, Blog blog){
+    public void sendBlogToElasticsearch(String exchange, String routingKey, Blog blog){
         rabbitTemplate.convertAndSend(exchange,routingKey,blog);
     }
 
-    public void sendBlogDelElasticsearch(String exchange, String routingKey, Blog blog){
-        rabbitTemplate.convertAndSend(exchange,routingKey,blog);
+
+    public void sendUserToElasticsearch(String exchange, String routingKey, User user){
+        rabbitTemplate.convertAndSend(exchange,routingKey,user);
     }
 
-    public void sendBlogModElasticsearch(String exchange, String routingKey, Blog blog){
-        rabbitTemplate.convertAndSend(exchange,routingKey,blog);
-    }
 
 }

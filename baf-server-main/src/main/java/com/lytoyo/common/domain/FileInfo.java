@@ -1,5 +1,6 @@
 package com.lytoyo.common.domain;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -15,13 +16,13 @@ import java.math.BigDecimal;
  * @Create:2025/12/22 10:41
  **/
 @Data
-@TableName
+@TableName("file_info")
 @Accessors(chain = true)
 public class FileInfo extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
-    @TableId
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     @TableField("user_id")
@@ -29,6 +30,9 @@ public class FileInfo extends BaseEntity {
 
     @TableField("file_name")
     private String fileName;
+
+    @TableField("cover")
+    private String cover;
 
     @TableField("size")
     private Long size;
@@ -47,9 +51,6 @@ public class FileInfo extends BaseEntity {
 
     @TableField("suffix")
     private String suffix;
-
-    @TableField("url")
-    private String url;
 
     @TableField("description")
     private String description;

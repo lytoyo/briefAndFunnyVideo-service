@@ -2,10 +2,12 @@ package com.lytoyo.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lytoyo.common.domain.FileInfo;
+import com.lytoyo.common.domain.Result;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.math.BigDecimal;
 
 /**
@@ -27,7 +29,7 @@ public interface FileService extends IService<FileInfo> {
      * 文件分片合并
      * @return
      */
-    boolean zoneMerge(String md5, String suffix, Long size, String type, Integer chunkCount, BigDecimal duration, Integer width, Integer height);
+    boolean zoneMerge(String md5, String suffix, Long size, String type, Integer chunkCount, BigDecimal duration, Integer width, Integer height) throws Exception;
 
     /**
      * 分片获取视频
@@ -45,4 +47,18 @@ public interface FileService extends IService<FileInfo> {
     boolean smallFileUpload(MultipartFile file, String md5, String suffix,
                             Long size, String type, Integer width,
                             Integer height, BigDecimal duration);
+
+    /**
+     * 聊天文件上传
+     * @param file
+     * @param suffix
+     * @param size
+     * @param type
+     * @param width
+     * @param height
+     * @param duration
+     * @return
+     */
+    Result commentFileUpload(MultipartFile file, String suffix, Long size, String type, Integer width,
+                             Integer height, BigDecimal duration) throws Exception;
 }

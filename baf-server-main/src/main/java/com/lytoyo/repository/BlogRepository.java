@@ -1,7 +1,9 @@
-package com.lytoyo.common.repository;
+package com.lytoyo.repository;
 
 import com.lytoyo.common.domain.Blog;
 import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
+
+import java.util.List;
 
 /**
  * Package:com.lytoyo.common.repository
@@ -11,4 +13,5 @@ import org.springframework.data.elasticsearch.repository.ElasticsearchRepository
  **/
 
 public interface BlogRepository extends ElasticsearchRepository<Blog,Long> {
+
 }

@@ -1,5 +1,6 @@
 package com.lytoyo.common.domain;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -28,14 +29,14 @@ public class Blog extends BaseEntity{
     private static final long serialVersionUID = 1L;
 
     @Id
-    @TableId
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     @Field(type = FieldType.Long)
     @TableField("user_id")
     private Long userId;
 
-    @Field(type = FieldType.Text,analyzer = "ik")
+    @Field(type = FieldType.Text,analyzer = "ik_max_word")
     @TableField("content")
     private String content;
 
@@ -72,8 +73,8 @@ public class Blog extends BaseEntity{
     private Integer commentCount;
 
     @Field(type = FieldType.Integer)
-    @TableField("share_count")
-    private Integer shareCount;
+    @TableField("collect_count")
+    private Integer collectCount;
 
     @Field(type = FieldType.Date,
             format = DateFormat.custom,

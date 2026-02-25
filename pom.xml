@@ -30,12 +30,14 @@
         <lombok.version>1.18.30</lombok.version>
         <mybatis-plus.version>3.5.4.1</mybatis-plus.version>
         <mysql.version>8.0.33</mysql.version>
-        <fastjson.version>2.0.40</fastjson.version>
+        <fastjson.version>2.0.42</fastjson.version>
         <hutool.version>5.8.22</hutool.version>
         <jwt.version>0.12.6</jwt.version>
         <mail.version>1.6.2</mail.version>
         <mybatis.version>3.0.3</mybatis.version>
         <minio.version>8.2.0</minio.version>
+        <javacv.version>1.5.6</javacv.version>
+        <ffmpeg-platform.version>4.4-1.5.6</ffmpeg-platform.version>
         <elasticsearch.version>7.15.2</elasticsearch.version>
         <activatedProperties>dev</activatedProperties>
     </properties>
@@ -77,12 +79,6 @@
             </dependency>
 
             <dependency>
-                <groupId>com.alibaba.fastjson2</groupId>
-                <artifactId>fastjson2</artifactId>
-                <version>${fastjson.version}</version>
-            </dependency>
-
-            <dependency>
                 <groupId>org.mybatis.spring.boot</groupId>
                 <artifactId>mybatis-spring-boot-starter</artifactId>
                 <version>${mybatis.version}</version>
@@ -108,6 +104,12 @@
             </dependency>
 
             <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>fastjson</artifactId>
+                <version>${fastjson.version}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-gson</artifactId>
                 <version>${jwt.version}</version>
@@ -117,6 +119,18 @@
                 <groupId>org.elasticsearch.client</groupId>
                 <artifactId>elasticsearch-rest-high-level-client</artifactId>
                 <version>${elasticsearch.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.bytedeco</groupId>
+                <artifactId>javacv</artifactId>
+                <version>${javacv.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.bytedeco</groupId>
+                <artifactId>ffmpeg-platform</artifactId>
+                <version>${ffmpeg-platform.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

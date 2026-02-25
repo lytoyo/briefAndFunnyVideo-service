@@ -20,24 +20,31 @@ public class SystemController {
     @Resource
     private SystemService systemService;
 
-    @SysLog(value = "获取邮箱验证码")
+    @SysLog(value = "获取邮箱验证码",require = true,needLogin = false)
     @GetMapping("/code")
     public Result getCode(@RequestParam("email") String email){
         Result r = systemService.getCode(email);
         return r;
     }
 
-    @SysLog(value = "注册账户")
+    @SysLog(value = "注册账户",require = true,needLogin = false)
     @PostMapping("/register")
     public Result register(@RequestBody User user){
         Result r = systemService.register(user);
         return r;
     }
 
-    @SysLog(value = "用户登录")
+    @SysLog(value = "用户登录",require = true,needLogin = false)
     @PostMapping("/login")
     public Result login(@RequestBody User user){
         Result r = systemService.login(user);
+        return r;
+    }
+
+    @SysLog(value = "退出登录",require = true,needLogin = true)
+    @PostMapping("/logoff")
+    public Result logoff(@RequestParam("userId") Long userId){
+        Result r = systemService.logoff(userId);
         return r;
     }
 }

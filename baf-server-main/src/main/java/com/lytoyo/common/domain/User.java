@@ -1,10 +1,13 @@
 package com.lytoyo.common.domain;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.experimental.Accessors;
+
+import java.util.Date;
 
 /**
  * Package:com.lytoyo.common.domain
@@ -20,7 +23,7 @@ public class User extends BaseEntity{
     private static final long serialVersionUID = 1L;
 
 
-    @TableId
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
@@ -71,6 +74,7 @@ public class User extends BaseEntity{
     @TableField("phone")
     private String phone;
 
+
     /**
      * 状态： 0-禁用 1-启用 2-锁定
      */
@@ -106,5 +110,17 @@ public class User extends BaseEntity{
      */
     @TableField("address")
     private String address;
+
+    /**
+     * 最近登录时间
+     */
+    @TableField("loging_time")
+    private Date logingTime;
+
+    /**
+     * 最近下线时间
+     */
+    @TableField("downline_time")
+    private Date downlineTime;
 
 }

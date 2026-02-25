@@ -24,7 +24,7 @@ public class FileController {
     @Resource
     private FileService fileService;
 
-    @SysLog(value = "文件分片上传",require = false)
+    @SysLog(value = "文件分片上传",require = false,needLogin = true)
     @PostMapping("/uploadZone")
     public Result uploadZone(@RequestParam("file") MultipartFile file,@RequestParam("md5") String md5,
                              @RequestParam("chunkIndex")Integer chunkIndex){
@@ -32,22 +32,16 @@ public class FileController {
         return Result.success();
     }
 
-    @SysLog(value = "文件分片合并")
+    @SysLog(value = "文件分片合并",require = true,needLogin = true)
     @GetMapping("/zoneMerge")
     public Result zoneMerge(@RequestParam("md5")String md5,@RequestParam("suffix")String suffix,
                             @RequestParam("size")Long size,@RequestParam("type")String type,
                             @RequestParam("chunkCount")Integer chunkCount, @RequestParam(value = "duration",required = false) BigDecimal duration,
-                            @RequestParam(value = "width",required = false) Integer width,@RequestParam(value = "height",required = false) Integer height){
+                            @RequestParam(value = "width",required = false) Integer width,@RequestParam(value = "height",required = false) Integer height) throws Exception {
         boolean flag = fileService.zoneMerge(md5,suffix,size,type,chunkCount,duration,width,height);
         return Result.success(flag);
     }
 
-    /**
-     * 分片获取视频
-     * @param videoName
-     * @param request
-     * @param response
-     * */
     @RequestMapping("/zoneRequest")
     public void zoneRequest(@RequestParam("videoName")String videoName,
                             HttpServletRequest request,
@@ -55,7 +49,7 @@ public class FileController {
         fileService.zoneRequest(videoName,request,response);
     }
 
-    @SysLog(value = "简单文件上传",require = true)
+    @SysLog(value = "简单文件上传",require = true,needLogin = true)
     @PostMapping("/smallFileUpload")
     public Result smallFileUpload(@RequestParam("file") MultipartFile file, @RequestParam("suffix") String suffix,
                                   @RequestParam("md5") String md5,@RequestParam("size") Long size,
@@ -64,5 +58,15 @@ public class FileController {
 
         boolean flag = fileService.smallFileUpload(file,md5,suffix,size,type,width,height,duration);
         return Result.success(flag);
+    }
+
+    @SysLog(value = "聊天文件上传",require = true)
+    @PostMapping("/commentFileUpload")
+    public Result commentFileUpload(@RequestParam("file") MultipartFile file,@RequestParam("suffix") String suffix,
+                                    @RequestParam("size") Long size,@RequestParam("type") String type,
+                                    @RequestParam(value = "width",required = false) Integer width,
+                                    @RequestParam(value = "height",required = false) Integer height,
+                                    @RequestParam(value = "duration",required = false) BigDecimal duration) throws Exception{
+        return this.fileService.commentFileUpload(file,suffix,size,type,width,height,duration);
     }
 }

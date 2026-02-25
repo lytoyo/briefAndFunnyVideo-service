@@ -24,13 +24,19 @@ public class RedisConfig {
     @Bean
     public RedisTemplate<String,Object> redisTemplate(LettuceConnectionFactory lettuceConnectionFactory){
         RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(lettuceConnectionFactory);
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-        template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
-        template.afterPropertiesSet();
-        log.info("Redis初始化完成");
-        return template;
+        try {
+            template.setConnectionFactory(lettuceConnectionFactory);
+            template.setKeySerializer(new StringRedisSerializer());
+            template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+            template.setHashKeySerializer(new StringRedisSerializer());
+            template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+            template.afterPropertiesSet();
+            log.info("Redis初始化完成");
+
+        }catch (Exception e){
+            log.error("Redis初始化失败",e);
+        }finally {
+            return template;
+        }
     }
 }

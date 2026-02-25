@@ -2,6 +2,7 @@ package com.lytoyo.common.domain;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
@@ -28,6 +29,7 @@ public class BaseEntity implements Serializable {
      */
     @JsonIgnore
     @TableField("delete_flag")
+    @TableLogic
     private Integer deleteFlag;
 
     @JsonIgnore

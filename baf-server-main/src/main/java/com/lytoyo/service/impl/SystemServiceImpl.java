@@ -1,21 +1,28 @@
 package com.lytoyo.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.extra.mail.Mail;
 import cn.hutool.extra.mail.MailAccount;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.lytoyo.common.constant.RabbitMqConstant;
 import com.lytoyo.common.constant.RedisConstant;
 import com.lytoyo.common.constant.SystemConstant;
 import com.lytoyo.common.domain.Result;
 import com.lytoyo.common.domain.User;
 import com.lytoyo.common.domain.vo.UserVo;
 import com.lytoyo.common.properties.EmailProperties;
+import com.lytoyo.common.properties.MinioProperties;
 import com.lytoyo.common.utils.CodeUtil;
 import com.lytoyo.common.utils.JwtUtil;
 import com.lytoyo.common.utils.PasswordUtil;
+import com.lytoyo.common.utils.RabbitMqUtil;
 import com.lytoyo.service.SystemService;
 import com.lytoyo.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -52,6 +59,11 @@ public class SystemServiceImpl implements SystemService {
     @Resource
     private PasswordUtil passwordUtil;
 
+    @Resource
+    private RabbitMqUtil rabbitMqUtil;
+
+    @Resource
+    private MinioProperties minioProperties;
 
     /**
      * 获取邮箱验证码
@@ -132,6 +144,8 @@ public class SystemServiceImpl implements SystemService {
             .setStatus(1);
         //数据插入
         this.userService.save(user);
+        //用户信息异步上传elasticsearch
+        rabbitMqUtil.sendUserToElasticsearch(RabbitMqConstant.DIRECTEXCHANGE,RabbitMqConstant.USER_UP_ROUTINGKEY,user);
         return Result.success();
     }
 
@@ -162,15 +176,35 @@ public class SystemServiceImpl implements SystemService {
         //将用户基本信息存入redis，时效1小时
         UserVo userVo = new UserVo();
         BeanUtil.copyProperties(one,userVo);
+        userVo.setAvatar(minioProperties.getUrl() + userVo.getAvatar());
         redisTemplate.opsForValue().set(RedisConstant.USER + one.getId(),userVo,RedisConstant.USEREPASTDUE,TimeUnit.HOURS);
         //将id使用token工具类生成token
         String token = JwtUtil.geneJsonWebToken(one.getId());
+        Date loginTime = DateUtil.date();
+
+        one.setLogingTime(loginTime);
+        this.userService.updateById(one);
         //返回token
         //登录成功后将用户可见信息一起返回
         Map<String, Object> result = new HashMap<>();
         result.put("token",token);
-        result.put("user",one);
+        result.put("user",userVo);
         return Result.success(result);
+    }
+
+    /**
+     * 退出登录
+     * @param userId
+     * @return
+     */
+    @Override
+    public Result logoff(Long userId) {
+//        //记录退出登录的时间
+//        UpdateWrapper<User> updateWrapper = new UpdateWrapper<>();
+//        updateWrapper.eq("user_id",userId);
+//        updateWrapper.set("downline_time",DateUtil.date());
+//        boolean flag = this.userService.update(updateWrapper);
+        return Result.success();
     }
 
 
@@ -223,6 +257,5 @@ public class SystemServiceImpl implements SystemService {
         account.setStarttlsEnable(true);
         return account;
     }
-
 
 }

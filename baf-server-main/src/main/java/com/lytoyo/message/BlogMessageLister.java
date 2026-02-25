@@ -1,9 +1,7 @@
 package com.lytoyo.message;
 
 import com.lytoyo.common.domain.Blog;
-import com.lytoyo.common.repository.BlogRepository;
-import com.lytoyo.service.BlogService;
-import io.minio.RemoveObjectArgs;
+import com.lytoyo.repository.BlogRepository;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.Exchange;
 import org.springframework.amqp.rabbit.annotation.Queue;
@@ -13,7 +11,6 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.nio.channels.Channel;
-import java.util.Map;
 
 /**
  * Package:com.lytoyo.message
@@ -29,19 +26,19 @@ public class BlogMessageLister {
 
     @RabbitListener(bindings = @QueueBinding(value = @Queue(durable = "true", value = "queue.baf.up.blog"),
             exchange = @Exchange(value = "exchange.direct.baf"), key = {"routing.baf.up.blog"}))
-    public void blogUpElasticsearchProcessMessage(Blog blog, Message message, Channel channel) {
+    public void blogUpElasticsearchProcessMessage(Blog blog) {
         blogRepository.save(blog);
     }
 
     @RabbitListener(bindings = @QueueBinding(value = @Queue(durable = "true", value = "queue.baf.del.blog"),
             exchange = @Exchange(value = "exchange.direct.baf"), key = {"routing.baf.del.blog"}))
-    public void blogDelElasticsearchProcessMessage(Blog blog, Message message, Channel channel) {
+    public void blogDelElasticsearchProcessMessage(Blog blog) {
         blogRepository.delete(blog);
     }
 
     @RabbitListener(bindings = @QueueBinding(value = @Queue(durable = "true", value = "queue.baf.mod.blog"),
             exchange = @Exchange(value = "exchange.direct.baf"), key = {"routing.baf.mod.blog"}))
-    public void blogModElasticsearchProcessMessage(Blog blog, Message message, Channel channel) {
+    public void blogModElasticsearchProcessMessage(Blog blog) {
         blogRepository.deleteById(blog.getId());
         blogRepository.save(blog);
     }

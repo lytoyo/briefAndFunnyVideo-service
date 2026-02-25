@@ -13,7 +13,7 @@ import javax.annotation.Resource;
 
 /**
  * Package:com.lytoyo.framework.config
- *
+ *  minio配置类
  * @ClassName:MinioConfig
  * @Create:2025/12/8 10:50
  **/
@@ -37,10 +37,11 @@ public class MinioConfig {
             if(!bucketExist){
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(minioProperties.getBucketName()).build());
             }
+            log.info("minio初始化完成");
         }catch (Exception e){
-            e.printStackTrace();
+            log.error("minio初始化失败:",e);
+        }finally {
+            return minioClient;
         }
-        log.info("minio初始化完成");
-        return minioClient;
     }
 }

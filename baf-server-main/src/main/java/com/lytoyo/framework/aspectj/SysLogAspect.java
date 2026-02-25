@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Package:com.lytoyo.framework.aspectj
- *
+ * 日志切面类
  * @ClassName:SysLogAspect
  * @Create:2025/12/4 15:48
  **/
@@ -76,8 +76,14 @@ public class SysLogAspect {
             //获取请求头的Authorization
             String authorization = request.getHeader("Authorization");
             String[] headers = authorization.split(" ");
-            String token = headers[1];
-            Long id = JwtUtil.checkJWT(token);
+            if (headers.length < 2 && headers[0].equals("Bearer")){
+                return Result.error(ExceptionEnum.SIGNATURE_NOT_MATCH);
+            }
+            Long id = null;
+            if (!headers[0].equals("Basic")){
+                String token = headers[1];
+                id = JwtUtil.checkJWT(token);
+            }
             //需要登录的操作
             if (headers[0].equals("Bearer")) {
                 //验证token是否过期
