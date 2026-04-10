@@ -77,4 +77,36 @@ public interface UserService extends IService<User> {
      * @return
      */
     Result otherUserDetail(Long userId);
+
+    /**
+     * 关注其他用户
+     * @param userId
+     * @return
+     */
+    Result attentionUser(Long userId);
+
+    /**
+     * 后台获取用户列表
+     * @param current
+     * @param size
+     * @param userName
+     * @param status
+     * @param category
+     * @return
+     */
+    Result userList(Integer current, Integer size, String userName, Integer status, Integer category);
+
+    /**
+     * 用户更新
+     * @param user
+     * @return
+     */
+    Result userUpdate(User user);
+
+    /**
+     * 系统用户登录
+     * @param user
+     * @return
+     */
+    Result login(User user);
 }

@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.lytoyo.common.constant.RabbitMqConstant;
 import com.lytoyo.common.constant.RedisConstant;
 import com.lytoyo.common.constant.SystemConstant;
+import com.lytoyo.common.domain.Blog;
 import com.lytoyo.common.domain.Result;
 import com.lytoyo.common.domain.User;
 import com.lytoyo.common.domain.vo.UserVo;
@@ -19,12 +20,20 @@ import com.lytoyo.common.utils.CodeUtil;
 import com.lytoyo.common.utils.JwtUtil;
 import com.lytoyo.common.utils.PasswordUtil;
 import com.lytoyo.common.utils.RabbitMqUtil;
+import com.lytoyo.mapper.BlogMapper;
+import com.lytoyo.mapper.CommentMapper;
+import com.lytoyo.mapper.UserMapper;
+import com.lytoyo.service.BlogService;
+import com.lytoyo.service.CommentService;
 import com.lytoyo.service.SystemService;
 import com.lytoyo.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.TemplateEngine;
@@ -64,6 +73,21 @@ public class SystemServiceImpl implements SystemService {
 
     @Resource
     private MinioProperties minioProperties;
+
+    @Resource
+    private BlogService blogService;
+
+    @Resource
+    private CommentService commentService;
+
+    @Resource
+    private UserMapper userMapper;
+
+    @Resource
+    private BlogMapper blogMapper;
+
+    @Resource
+    private CommentMapper commentMapper;
 
     /**
      * 获取邮箱验证码
@@ -206,6 +230,61 @@ public class SystemServiceImpl implements SystemService {
 //        boolean flag = this.userService.update(updateWrapper);
         return Result.success();
     }
+
+    @Override
+    public Result overview() {
+        Map<String, Object> result = new HashMap<>();
+        long userTotal = this.userService.count();
+        long blogTotal = this.blogService.count();
+        long commentTotal = this.commentService.count();
+        long onlineUser = userOnlineCount("user:*");
+        long pendingUser = this.userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getStatus,2));
+        long pendingBlog = this.blogMapper.selectCount(new LambdaQueryWrapper<Blog>().eq(Blog::getStatus,2));
+        long blockedComment = this.commentMapper.selectShieldCount();
+        long todayUser = this.userMapper.selectAddUserCount();
+        long todayBlog = this.blogMapper.selectAddBlogCount();
+        long todayComment = this.commentMapper.selectAddCommentCount();
+        result.put("userTotal",userTotal);
+        result.put("blogTotal",blogTotal);
+        result.put("commentTotal",commentTotal);
+        result.put("onlineUser",onlineUser);
+        result.put("pendingUser",pendingUser);
+        result.put("pendingBlog",pendingBlog);
+        result.put("blockedComment",blockedComment);
+        result.put("todayUser",todayUser);
+        result.put("todayBlog",todayBlog);
+        result.put("todayComment",todayComment);
+        return Result.success(result);
+    }
+
+    private long userOnlineCount(String pattern) {
+        long count = 0;
+        // 使用 SCAN 命令而不是 KEYS 命令（避免阻塞）
+        Cursor<byte[]> cursor = null;
+        try {
+            // 获取 Redis 连接
+            RedisConnection connection = redisTemplate.getConnectionFactory().getConnection();
+
+            // 使用 SCAN 命令
+            ScanOptions options = ScanOptions.scanOptions()
+                    .match(pattern)  // 匹配模式
+                    .count(1000)     // 每次扫描数量
+                    .build();
+
+            cursor = connection.scan(options);
+
+            while (cursor.hasNext()) {
+                cursor.next();
+                count++;
+            }
+        } finally {
+            if (cursor != null && !cursor.isClosed()) {
+                cursor.close();
+            }
+        }
+        return count;
+    }
+
 
 
     /**

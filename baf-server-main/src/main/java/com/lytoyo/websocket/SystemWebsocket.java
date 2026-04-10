@@ -15,6 +15,7 @@ import com.lytoyo.common.domain.vo.UserVo;
 import com.lytoyo.common.utils.WebsocketUtil;
 import com.lytoyo.mapper.AttentionMapper;
 import com.lytoyo.mapper.MessageMapper;
+import com.lytoyo.mapper.UserMapper;
 import com.lytoyo.service.MessageService;
 import com.lytoyo.service.UserService;
 import com.lytoyo.service.impl.UserServiceImpl;
@@ -28,10 +29,7 @@ import javax.annotation.Resource;
 import javax.websocket.*;
 import javax.websocket.server.PathParam;
 import javax.websocket.server.ServerEndpoint;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +45,8 @@ public class SystemWebsocket {
 
     private static UserService userService;
 
+    private static UserMapper userMapper;
+
     private static MessageService messageService;
 
     private static MessageMapper messageMapper;
@@ -56,6 +56,11 @@ public class SystemWebsocket {
     @Autowired
     public void setUserService(UserServiceImpl userService) {
         SystemWebsocket.userService = userService;
+    }
+
+    @Autowired
+    public void setUserMapper(UserMapper userMapper) {
+        SystemWebsocket.userMapper = userMapper;
     }
 
     @Autowired
@@ -75,61 +80,26 @@ public class SystemWebsocket {
 
     @OnOpen
     public void onOpen(Session session, @PathParam("userId") Long userId) {
+
         User user = userService.getById(userId);
-
-        //查看当前用户关注对象
-        List<Long> postHostUserIdList = attentionMapper.selectList(new LambdaQueryWrapper<Attention>()
-                        .eq(Attention::getFansUserId, userId))
-                        .stream()
-                        .map(attention -> {
-                            //贴主id
-                            Long postHostUserId = attention.getUserId();
-                            return postHostUserId;
-                        }).collect(Collectors.toList());
-
         UserVo userVo = new UserVo();
         BeanUtils.copyProperties(user, userVo);
         //用户信息绑定添加
         WebsocketUtil.addUser(userId, userVo);
         WebsocketUtil.addSession(userId, session);
+        WebsocketUtil.getDownlineTimeMessage(user);
 
-        long downlineTime = user.getDownlineTime().getTime();
-        //每次重新连接websocket都要比较消息队列表里发布时间与用户最近离线时间
-        //拉取前面未登录而错过的消息并剔除关注推送消息
-        List<MessageVo> messageVoList = messageMapper.selectList(new LambdaQueryWrapper<Message>()
-                        .in(Message::getToUserId,userId,0,-1)
-                        .ge(Message::getTimestamp, downlineTime))
-                .stream().filter(f -> {
-                    boolean flag = true;
-                    //条件：这条为关注推送消息，用户的关注列表大于0.这条关注推送消息发送者是用户关注列表里的
-                    if (f.getMessageTypeCode() == 2){
-                        if (postHostUserIdList.size() > 0 && postHostUserIdList.contains(f.getFromUserId())){
-                            flag = true;
-                        }else{
-                            flag = false;
-                        }
-                    }
-                    return flag;
-                })
-                .map(message -> {
-                    MessageVo messageVo = new MessageVo();
-                    BeanUtils.copyProperties(message, messageVo);
-                    messageVo.setData(JSON.parse(message.getData()));
-                    return messageVo;
-                }).collect(Collectors.toList());
-        //发送未读取的消息列表
-        WebsocketUtil.sendMessageToObject(messageVoList);
     }
 
     @OnMessage
     public void onMessage(String msg, Session session) {
-        //构建发送给用户交换的消息体
-        MessageVo messageVo = JSONObject.parseObject(msg, MessageVo.class);
-        List<MessageVo> messageVoList = Arrays.asList(messageVo);
-        //存储消息体
-        WebsocketUtil.storeMessage(messageVo);
-        //发送消息
-        WebsocketUtil.sendMessageToObject(messageVoList);
+        System.out.println(msg);
+        MessageVo messageVo = JSON.parseObject(msg,MessageVo.class);
+        //忽略心跳包
+        if (messageVo.getType().equals("heartbeat")){
+            return;
+        }
+        WebsocketUtil.sendMessage(messageVo);
 
     }
 

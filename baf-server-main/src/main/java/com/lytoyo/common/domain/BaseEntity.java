@@ -27,7 +27,6 @@ public class BaseEntity implements Serializable {
     /**
      * 是否删除
      */
-    @JsonIgnore
     @TableField("delete_flag")
     @TableLogic
     private Integer deleteFlag;

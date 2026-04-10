@@ -6,21 +6,26 @@ import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lytoyo.common.domain.Attention;
 import com.lytoyo.common.domain.Message;
+import com.lytoyo.common.domain.User;
+import com.lytoyo.common.domain.vo.ContentVo;
 import com.lytoyo.common.domain.vo.MessageVo;
 import com.lytoyo.common.domain.vo.UserVo;
+import com.lytoyo.common.properties.MinioProperties;
 import com.lytoyo.mapper.AttentionMapper;
+import com.lytoyo.mapper.MessageMapper;
+import com.lytoyo.mapper.UserMapper;
 import com.lytoyo.service.AttentionService;
 import com.lytoyo.service.MessageService;
+import com.lytoyo.websocket.SystemWebsocket;
 import lombok.extern.slf4j.Slf4j;
+import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import javax.websocket.Session;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -49,6 +54,105 @@ public class WebsocketUtil {
     private static AttentionService attentionService;
 
     private static AttentionMapper attentionMapper;
+
+    private static MessageMapper messageMapper;
+
+    private static UserMapper userMapper;
+
+    private static MinioProperties minioProperties;
+
+    @Autowired
+    public  void setMinioProperties(MinioProperties minioProperties){
+        WebsocketUtil.minioProperties = minioProperties;
+    }
+
+    @Autowired
+    public void setMessageMapper(MessageMapper messageMapper){
+        WebsocketUtil.messageMapper = messageMapper;
+    }
+
+    @Autowired
+    public  void setUserMapper(UserMapper userMapper){
+        WebsocketUtil.userMapper = userMapper;
+    }
+
+    public static void sendMessage(MessageVo messageVo) {
+        
+        messageVo.setPublicTime(new Date());
+        Message message = new Message();
+        BeanUtils.copyProperties(messageVo,message);
+        if (messageVo.getData().getFileType() != null) {
+            ContentVo contentVo = messageVo.getData();
+            String[] tempUrls = contentVo.getFileUrl().split("/");
+            System.out.println(tempUrls[tempUrls.length-1]);
+            contentVo.setFileUrl(tempUrls[tempUrls.length-1]);
+            if (contentVo.getFileType().equals("video")){
+                String[] coverUrls = contentVo.getCover().split("/");
+                contentVo.setCover(coverUrls[coverUrls.length-1]);
+            }
+            messageVo.setData(contentVo);
+        }
+        message.setData(JSON.toJSONString(messageVo.getData()));
+
+        //存储消息
+        WebsocketUtil.messageService.save(message);
+        messageVo.setId(message.getId());
+
+        if (messageVo.getType().equals("private")){
+            WebsocketUtil.sendToUser(messageVo.getToUserId(),messageVo);
+            WebsocketUtil.sendToUser(messageVo.getFromUserId(),messageVo);
+        } else if (messageVo.getType().equals("attention")) {
+            return;
+        } else if (messageVo.getType().equals("system")) {
+            return;
+        } else if (messageVo.getType().equals("notification")) {
+            return;
+        }
+
+    }
+
+    public static void getDownlineTimeMessage(User user) {
+        Date downlineTime = user.getDownlineTime();
+        //每次重新连接websocket都要比较消息队列表里发布时间与用户最近离线时间
+        //拉取前面未登录而错过的消息并剔除关注推送消息
+        List<Message> messagesList = WebsocketUtil.messageMapper.selectList(new LambdaQueryWrapper<Message>()
+                .in(Message::getToUserId, user.getId(),0,-1).ge(Message::getPublicTime, downlineTime));
+        if (messagesList.size() == 0) return;
+        //获取信息中的idSet集合
+        HashSet<Long> userIdSet = new HashSet<>();
+        messagesList.stream().forEach(message -> {
+            userIdSet.add(message.getFromUserId());
+            userIdSet.add(message.getToUserId());
+        });
+
+        //获取userVo map集合
+        Map<Long, UserVo> userVoMap = new HashMap<>();
+        userMapper.selectBatchIds(userIdSet).forEach(u->{
+            UserVo userVo = new UserVo();
+            BeanUtils.copyProperties(u,userVo);
+            userVo.setAvatar(WebsocketUtil.minioProperties.getUrl() + userVo.getAvatar());
+            userVoMap.put(u.getId(),userVo);
+        });
+
+        //封装messageVo集合
+        List<MessageVo> messageVoList = new ArrayList<>();
+        messagesList.stream().forEach(message -> {
+            MessageVo messageVo = new MessageVo();
+            ContentVo contentVo = JSON.parseObject(message.getData(),ContentVo.class);
+            contentVo.setCover(WebsocketUtil.minioProperties.getUrl() + contentVo.getCover());
+            contentVo.setFileUrl(WebsocketUtil.minioProperties.getUrl() + contentVo.getFileUrl());
+            BeanUtils.copyProperties(message,messageVo);
+            messageVo.setData(contentVo);
+            messageVo.setFromUserVo(userVoMap.get(messageVo.getFromUserId()));
+            messageVo.setToUserVo(userVoMap.get(messageVo.getToUserId()));
+
+            messageVoList.add(messageVo);
+        });
+
+        messageVoList.stream().forEach(messageVo -> {
+            WebsocketUtil.sendToUser(user.getId(),messageVo);
+        });
+    }
 
     @Autowired
     public void setMessageService(MessageService messageService) {
@@ -105,7 +209,7 @@ public class WebsocketUtil {
     public static MessageVo buildMessageVo(Message message) {
         MessageVo messageVo = new MessageVo();
         BeanUtils.copyProperties(message, messageVo);
-        messageVo.setData(JSON.parse(message.getData()));
+        messageVo.setData(JSON.parseObject(message.getData(), ContentVo.class));
         return messageVo;
     }
 
@@ -144,48 +248,6 @@ public class WebsocketUtil {
     public static boolean isUserOnline(Long receiverId) {
         Session session = WebsocketUtil.getSession(receiverId);
         return session != null ? true : false;
-    }
-
-    /**
-     * 根据信息类型将信息发送给对象
-     *
-     * @param messageVoList
-     */
-    public static void sendMessageToObject(List<MessageVo> messageVoList) {
-        for (MessageVo messageVo : messageVoList) {
-            //发送者
-            Long fromUserId = messageVo.getFromUserId();
-            //接收者
-            Long toUserId = messageVo.getToUserId();
-            switch (messageVo.getMessageTypeCode()) {
-                //系统公告
-                case 1:
-                    //广播所有在线用户
-                    for (Long userId : sessionMap.keySet()) {
-                        sendToUser(userId, messageVo);
-                    }
-                    break;
-                case 2:
-                    //查看当前在线的粉丝
-                    Set<Long> onLineUserIdList = sessionMap.keySet();
-                    List<Long> onLineFansUserIdList = onLineUserIdList.stream()
-                            .filter(attentionMapper.selectList(new LambdaQueryWrapper<Attention>()
-                                    .eq(Attention::getUserId, messageVo.getFromUserId())
-                                    .eq(Attention::getStatus, 1)).stream().map(attention -> {
-                                    return attention.getFansUserId();
-                            }).collect(Collectors.toList())::contains)
-                            .collect(Collectors.toList());
-                    for (Long userId: onLineFansUserIdList){
-                        sendToUser(userId,messageVo);
-                    }
-                    break;
-                //聊天、点赞、关注、评论消息
-                default:
-                    sendToUser(toUserId, messageVo);
-                    break;
-            }
-        }
-
     }
 
     /**

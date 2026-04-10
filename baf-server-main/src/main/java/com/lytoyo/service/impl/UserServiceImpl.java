@@ -7,9 +7,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lytoyo.common.domain.*;
 import com.lytoyo.common.domain.vo.BlogVo;
 import com.lytoyo.common.domain.vo.UserVo;
+import com.lytoyo.common.exception.ExceptionEnum;
 import com.lytoyo.common.properties.MinioProperties;
 import com.lytoyo.common.utils.AuthContextHolder;
 import com.lytoyo.common.utils.PasswordUtil;
+import com.lytoyo.common.utils.ResultCodeEnum;
 import com.lytoyo.mapper.*;
 import com.lytoyo.service.BlogService;
 import com.lytoyo.service.UserService;
@@ -19,6 +21,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import javax.xml.crypto.Data;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -64,6 +67,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Resource
     private CommentMapper commentMapper;
 
+
     /**
      * 用户注册
      */
@@ -100,6 +104,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public Result getStatus(Long userId) {
         HashMap<String, Object> result = new HashMap<>();
+        Long selfId = AuthContextHolder.getUserId();
         //查询用户获赞信息并整理
         Integer likedReduce = blogMapper.selectList(new LambdaQueryWrapper<Blog>()
         .eq(Blog::getUserId, userId)
@@ -122,6 +127,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .eq(Attention::getStatus, 1)).intValue();
         //查询用户状态
         Integer userStatus = userMapper.selectById(userId).getStatus();
+        Attention attention = this.attentionMapper.selectOne(new LambdaQueryWrapper<Attention>()
+                .eq( Attention::getFansUserId, selfId != null ? selfId : -1)
+                .eq(Attention::getUserId, userId)
+                .eq(Attention::getStatus, 1));
+        result.put("isAttention",null != attention ? true : false);
         result.put("likedCount", likedReduce);
         result.put("attentionCount", attentionReduce);
         result.put("fansCount", fansReduce);
@@ -416,4 +426,73 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userVo.setAvatar(this.minioProperties.getUrl() + userVo.getAvatar());
         return Result.success(userVo);
     }
+
+    /**
+     * 关注其他用户
+     * @param userId
+     * @return
+     */
+    @Override
+    public Result attentionUser(Long userId) {
+        User user = this.userMapper.selectById(userId);
+        Long fanUserId = AuthContextHolder.getUserId();
+        if (null == user) return Result.error(ExceptionEnum.BODY_NOT_MATCH);
+        Attention attention = this.attentionMapper.selectOne(new LambdaQueryWrapper<Attention>().eq(Attention::getUserId, userId).eq(Attention::getFansUserId, fanUserId));
+
+        if (null == attention){
+            attention = new Attention();
+            attention.setUserId(userId);
+            attention.setFansUserId(fanUserId);
+            attention.setStatus(1);
+            attention.setTimestamp(System.currentTimeMillis());
+            this.attentionMapper.insert(attention);
+            return Result.success(true);
+        }
+
+        boolean flag = attention.getStatus() == 0 ? true : false;
+        attention.setStatus(flag ? 1 : 0);
+        this.attentionMapper.updateById(attention);
+        return Result.success(flag);
+    }
+
+    @Override
+    public Result userList(Integer current, Integer size, String userName, Integer status, Integer category) {
+        Map<String, Object> result = new HashMap<>();
+        Page<User> userPage = new Page<>(current, size);
+        Page<User> pageResult = userMapper.selectPage(userPage, new LambdaQueryWrapper<User>().eq(status != 3, User::getStatus, status)
+                .eq(category != 3, User::getCategory, category).like(!userName.equals(""), User::getUserName, userName));
+
+        List<User> records = pageResult.getRecords();
+        result.put("result",records);
+        result.put("total",pageResult.getTotal());
+        result.put("pages",pageResult.getPages());
+        return Result.success(result);
+    }
+
+    /**
+     * 用户更新
+     * @param user
+     * @return
+     */
+    @Override
+    public Result userUpdate(User user) {
+        User one = this.getById(user.getId());
+        one.setUserName(user.getUserName());
+        one.setEmail(user.getEmail());
+        one.setCategory(user.getCategory());
+        one.setStatus(user.getStatus());
+        this.updateById(one);
+        return Result.success();
+    }
+
+    @Override
+    public Result login(User user) {
+        User one = this.userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getEmail, user.getEmail()));
+        if (one == null) return Result.fail("该账号不存在");
+        boolean flag = passwordUtil.verifyPassword(user.getPassword(), one.getPassword(), one.getSalt());
+        if (flag && one.getCategory() == 0) return Result.success();
+        return Result.fail("该账号无权限");
+    }
+
+
 }

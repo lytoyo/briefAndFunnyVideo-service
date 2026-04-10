@@ -50,7 +50,7 @@ mybatis-plus:
 
 email:
   config:
-    from: "短趣视频团队"
+    from: "短趣视频"
     password: EYRxmzT4S6vjXUHh
     host: smtp.163.com
     port: 465
@@ -76,5 +76,11 @@ ffmpeg:
 system:
   videoPath: D:/毕设项目/testFile/d658208e5ec5ba9e15bde72435f92509.mp4
 
-virtual-url: 10.99.21.200
+baidu:
+  AppId: 122442745
+  ApiKey: bce-v3/ALTAK-kdbuf3tTuVxhxKEPmJO2n/c10899b7ef4b7ba5065ea740d0e11ccbaa75bce7
+  secretKey: d89ea9b2aa9047f69663e4ce7168826b
+
+
+virtual-url: 192.168.1.200
 

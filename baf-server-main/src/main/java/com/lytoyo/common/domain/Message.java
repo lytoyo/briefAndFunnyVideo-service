@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Date;
 import java.util.UUID;
 
 /**
@@ -32,22 +33,16 @@ public class Message extends BaseEntity{
     private Long id;
 
     /**
-     * 消息类型
+     * 消息类型：heartbeat, private, attention，system, notification
      */
-    @TableField("message_type_code")
-    private Integer messageTypeCode;
+    @TableField("type")
+    private String type;
 
     /**
-     * 内容类型
+     * 发送时间
      */
-    @TableField("content_type_code")
-    private Integer contentTypeCode;
-
-    /**
-     * 时间戳
-     */
-    @TableField("timestamp")
-    private Long timestamp;
+    @TableField("public_time")
+    private Date publicTime;
 
     /**
      * 发送者id
@@ -60,6 +55,12 @@ public class Message extends BaseEntity{
      */
     @TableField("to_user_id")
     private Long toUserId;
+
+    /**
+     * 私聊id
+     */
+    @TableField("p2p_id")
+    private Long p2pId;
 
     /**
      * 消息内容

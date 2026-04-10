@@ -35,14 +35,14 @@ public interface BlogService extends IService<Blog> {
      * @param keyword
      * @return
      */
-    SearchHits<Blog> keywordComplement(String keyword);
+    Result keywordComplement(String keyword);
 
     /**
      * 关键字综合查询
      * @param keyword
      * @return
      */
-    Map<String,SearchHits> comprehensiveSearch(String keyword);
+    Result comprehensiveSearch(String keyword);
 
     /**
      * 关键字分页查询
@@ -135,4 +135,23 @@ public interface BlogService extends IService<Blog> {
      * @return
      */
     Result comment(Comment comment);
+
+    /**
+     * 根据条件查询博客列表
+     * @param current
+     * @param size
+     * @param keyword
+     * @param status
+     * @param fileType
+     * @return
+     */
+    Result listBlogs(Integer current, Integer size, String keyword, Integer status, String fileType);
+
+    Result commentList(Integer current, Integer size, Long postId, Long commentUserId, Integer type);
+
+    Result commentDetail(Long id);
+
+    Result commentUpdateStatus(Comment comment);
+
+    Result attentionPostList(Integer current, Integer size);
 }

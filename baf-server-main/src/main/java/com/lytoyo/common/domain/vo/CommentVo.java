@@ -83,4 +83,9 @@ public class CommentVo extends BaseEntity {
      *  发布时间
      */
     private Date publicTime;
+
+    /**
+     * 是否删除
+     */
+    private Integer deleteFlag;
 }

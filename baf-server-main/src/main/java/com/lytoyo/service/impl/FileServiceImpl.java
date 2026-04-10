@@ -21,6 +21,7 @@ import org.junit.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
@@ -32,6 +33,7 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.math.BigDecimal;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -109,12 +111,14 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
             Long userId = AuthContextHolder.getUserId();
             FileInfo fileInfo = new FileInfo();
 
-            //todo 暂时演示在windows系统上截取视频文件第一帧，上线linux还需修改
-        // TODO: 2026/1/9 例如截取的图片无法直接上传到minio，要想办法解决
             if (type.equals("video")){
-                String videoName = "d658208e5ec5ba9e15bde72435f92509.mp4";
-                String imagePath = captureFirstFrame(videoName);
-                fileInfo.setCover(imagePath);
+                String coverPath = generateCoverFromMinioFile(fileName);
+                if (coverPath != null) {
+                    // 上传封面到minio
+                    String coverName = md5 + ".jpg";
+                    uploadCoverToMinio(coverPath, coverName);
+                    fileInfo.setCover(coverName);
+                }
             }
 
             fileInfo.setFileName(fileName)
@@ -135,6 +139,69 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
             rabbitMqUtil.sendFileZoneMessage(RabbitMqConstant.DIRECTEXCHANGE,RabbitMqConstant.FILE_ROUTINGKEY,data);
 
         return flag;
+    }
+
+    /**
+     * 从Minio下载文件并生成封面
+     */
+    private String generateCoverFromMinioFile(String fileName) throws Exception {
+        File tempVideo = null;
+        File tempCover = null;
+
+        try {
+            // 1. 创建临时文件
+            tempVideo = File.createTempFile("video-", ".mp4");
+            tempCover = new File(tempVideo.getParent(),
+                    UUID.randomUUID().toString().replace("-", "") + ".jpg");
+
+            // 2. 从Minio下载视频文件
+            try (InputStream inputStream = minioClient.getObject(
+                    GetObjectArgs.builder()
+                            .bucket(minioProperties.getBucketName())
+                            .object(fileName)
+                            .build())) {
+
+                // 3. 将流写入临时文件
+                Files.copy(inputStream, tempVideo.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            // 4. 生成封面
+            extractFirstFrame(tempVideo, tempCover);
+
+            if (!tempCover.exists() || tempCover.length() == 0) {
+                throw new RuntimeException("封面生成失败");
+            }
+
+            return tempCover.getAbsolutePath();
+
+        } finally {
+            // 5. 清理临时视频文件
+            if (tempVideo != null && tempVideo.exists()) {
+                tempVideo.delete();
+            }
+        }
+    }
+
+    /**
+     * 上传封面到Minio
+     */
+    private void uploadCoverToMinio(String coverPath, String coverName) throws Exception {
+        File coverFile = new File(coverPath);
+
+        try (InputStream coverStream = new FileInputStream(coverFile)) {
+            minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(minioProperties.getBucketName())
+                    .object(coverName)
+                    .contentType("image/jpeg")
+                    .stream(coverStream, coverFile.length(), -1)
+                    .build());
+        } finally {
+            // 清理临时封面文件
+            if (coverFile.exists()) {
+                coverFile.delete();
+            }
+        }
     }
 
     /**
@@ -416,28 +483,73 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
      * 上传简单文件
      * @return
      */
+    @Transactional(rollbackFor = Exception.class)
     @Override
-    public boolean smallFileUpload(MultipartFile file, String md5, String suffix, Long size,
-                                   String type, Integer width, Integer height, BigDecimal duration) {
-        boolean flag = false;
-        try{
-            String fileName = md5 + suffix;
-            String contentType = type.equals("image")?"image/jpeg":"application/octet-stream";
-            minioClient.putObject(PutObjectArgs.builder()
-                       .bucket(minioProperties.getBucketName())
-                       .object(fileName)
-                       .contentType(contentType)
-                       .stream(file.getInputStream(), file.getSize(), -1)
-                       .build());
-            FileInfo fileInfo = new FileInfo();
+    public Result smallFileUpload(MultipartFile file, String md5, String suffix, Long size,
+                                   String type, Integer width, Integer height, BigDecimal duration) throws Exception {
 
-            Long userId = AuthContextHolder.getUserId();
-            if (type.equals("video")){
-                String videoName = "d658208e5ec5ba9e15bde72435f92509.mp4";
-                String imagePath = captureFirstFrame(videoName);
-                fileInfo.setCover(imagePath);
+        File tempCover = null;
+        String videoId = UUID.randomUUID().toString().replace("-","");
+        FileInfo fileInfo = new FileInfo();
+        try{
+            if ("video".equals(type)){
+                File tempVideo = File.createTempFile("video-", suffix);
+                tempCover = new File(tempVideo.getParent(),videoId + ".jpg");
+
+                //保存文件到临时位置
+                file.transferTo(tempVideo);
+
+                extractFirstFrame(tempVideo,tempCover);
+
+                // 验证封面生成
+                if (!tempCover.exists() || tempCover.length() == 0) {
+                    throw new RuntimeException("封面生成失败");
+                }
+
+                // 修复：重新从临时文件读取流，而不是从MultipartFile
+                try (InputStream videoStream = new FileInputStream(tempVideo)) {
+                    this.minioClient.putObject(PutObjectArgs.builder()
+                            .bucket(this.minioProperties.getBucketName())
+                            .object(videoId + suffix)
+                            .stream(videoStream, tempVideo.length(), -1)
+                            .build());
+                }
+
+                // 清理临时视频文件
+                tempVideo.delete();
+            }else {
+                // 修复：图片直接上传，只能读取一次流
+                InputStream inputStream = file.getInputStream();
+                this.minioClient.putObject(PutObjectArgs.builder()
+                        .bucket(this.minioProperties.getBucketName())
+                        .object(videoId + suffix)
+                        .contentType("image/jpeg")
+                        .stream(inputStream, file.getSize(), -1)
+                        .build());
+                inputStream.close();
             }
-            fileInfo.setFileName(fileName)
+            String cover = null;
+            // 将截取到的图片上传到minio
+            if (tempCover != null && tempCover.exists() && tempCover.length() > 0) {
+                cover = videoId + ".jpg";
+                try (InputStream coverStream = Files.newInputStream(tempCover.toPath())) {
+                    this.minioClient.putObject(PutObjectArgs.builder()
+                            .bucket(minioProperties.getBucketName())
+                            .object(cover)
+                            .contentType("image/jpeg")
+                            .stream(coverStream, tempCover.length(), -1)
+                            .build());
+                }
+
+                // 清理临时封面文件
+                tempCover.delete();
+            }
+            Long userId = AuthContextHolder.getUserId();
+            if (cover != null) {
+                fileInfo.setCover(cover);
+            }
+            String fileName = videoId + suffix;
+            fileInfo.setFileName(videoId + suffix)
                     .setUserId(userId)
                     .setSuffix(suffix)
                     .setSize(size)
@@ -446,11 +558,14 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
                     .setWidth(width)
                     .setHeight(height);
             //保存文件信息
-            flag = this.save(fileInfo);
+            this.save(fileInfo);
+            return Result.success(fileName);
         }catch (Exception e){
             e.printStackTrace();
+            throw e;
+        }finally {
+            tempCover.delete();
         }
-        return flag;
     }
 
     /**
@@ -469,7 +584,7 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
                                     Integer height, BigDecimal duration) throws Exception {
         Map<String, Object> result = new HashMap<>();
         File tempCover = null;
-        String videoId = UUID.randomUUID().toString();
+        String videoId = UUID.randomUUID().toString().replace("-","");
 
         try {
             // 判断类型，如果是视频类型使用ffmpeg去截取视频第一帧

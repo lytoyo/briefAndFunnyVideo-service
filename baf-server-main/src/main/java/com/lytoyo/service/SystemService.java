@@ -37,4 +37,10 @@ public interface SystemService {
      * @return
      */
     Result logoff(Long userId);
+
+    /**
+     * 系统首页概览
+     * @return
+     */
+    Result overview();
 }

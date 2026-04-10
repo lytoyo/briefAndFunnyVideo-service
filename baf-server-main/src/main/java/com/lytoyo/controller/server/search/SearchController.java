@@ -32,15 +32,14 @@ public class SearchController {
     @SysLog(value = "关键词补全",require = false,needLogin = false)
     @GetMapping("/complement")
     public Result keywordComplement(@RequestParam("keyword") String keyword){
-        SearchHits<Blog> result = blogService.keywordComplement(keyword);
-        return Result.success(result);
+        return blogService.keywordComplement(keyword);
     }
 
     @SysLog(value = "关键字综合查询",require = true,needLogin = false)
     @GetMapping("/comprehensiveSearch")
     public Result comprehensiveSearch(@RequestParam("keyword")String keyword){
-        Map<String,SearchHits> result = blogService.comprehensiveSearch(keyword);
-        return Result.success(result);
+        return blogService.comprehensiveSearch(keyword);
+
     }
 
     @SysLog(value = "关键词帖子分页查询",require = true,needLogin = false)

@@ -44,9 +44,9 @@ public interface FileService extends IService<FileInfo> {
      * 上传简单文件
      * @return
      */
-    boolean smallFileUpload(MultipartFile file, String md5, String suffix,
+    Result smallFileUpload(MultipartFile file, String md5, String suffix,
                             Long size, String type, Integer width,
-                            Integer height, BigDecimal duration);
+                            Integer height, BigDecimal duration) throws Exception;
 
     /**
      * 聊天文件上传

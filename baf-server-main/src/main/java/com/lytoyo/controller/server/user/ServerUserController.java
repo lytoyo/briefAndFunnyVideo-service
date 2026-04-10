@@ -3,12 +3,10 @@ package com.lytoyo.controller.server.user;
 import com.lytoyo.common.domain.Result;
 import com.lytoyo.framework.aspectj.SysLog;
 import com.lytoyo.service.UserService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import javax.websocket.server.PathParam;
 
 /**
  * Package:com.lytoyo.controller
@@ -74,5 +72,11 @@ public class ServerUserController {
     @SysLog(value = "获取其他用户的信息",require = true)
     public Result otherUserDetail(@RequestParam("userId") Long userId){
         return this.userService.otherUserDetail(userId);
+    }
+
+    @GetMapping("/attentionUser")
+    @SysLog(value = "关注其他用户",require = true)
+    public Result attentionUser(@RequestParam("userId") Long userId){
+        return this.userService.attentionUser(userId);
     }
 }

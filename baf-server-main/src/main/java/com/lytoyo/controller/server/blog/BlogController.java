@@ -33,7 +33,7 @@ public class BlogController {
 
     @SysLog(value = "博客审核通过",require = true,needLogin = true)
     @PostMapping("/approve")
-    public Result approveBlog(Long id){
+    public Result approveBlog(@RequestParam("id") Long id){
         return this.blogService.approveBlog(id);
     }
 
@@ -43,7 +43,6 @@ public class BlogController {
                            @RequestParam("size") Integer size){
         return this.blogService.postList(type,current,size);
     }
-
 
     @SysLog(value = "点赞处理",require = true)
     @PostMapping("/likedHandle")
@@ -88,5 +87,11 @@ public class BlogController {
     @SysLog(value = "帖子评论")
     public Result comment(@RequestBody Comment comment){
         return this.blogService.comment(comment);
+    }
+
+    @GetMapping("/list")
+    @SysLog(value = "关注帖子获取")
+    public Result postList(@RequestParam("current") Integer current, @RequestParam("size") Integer size){
+        return this.blogService.attentionPostList(current,size);
     }
 }

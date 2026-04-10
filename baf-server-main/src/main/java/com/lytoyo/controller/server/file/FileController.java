@@ -54,10 +54,10 @@ public class FileController {
     public Result smallFileUpload(@RequestParam("file") MultipartFile file, @RequestParam("suffix") String suffix,
                                   @RequestParam("md5") String md5,@RequestParam("size") Long size,
                                   @RequestParam("type") String type,@RequestParam(value = "width",required = false) Integer width,
-                                  @RequestParam(value = "height",required = false) Integer height,@RequestParam(value = "duration",required = false) BigDecimal duration){
+                                  @RequestParam(value = "height",required = false) Integer height,@RequestParam(value = "duration",required = false) BigDecimal duration) throws Exception {
 
-        boolean flag = fileService.smallFileUpload(file,md5,suffix,size,type,width,height,duration);
-        return Result.success(flag);
+        return this.fileService.smallFileUpload(file,md5,suffix,size,type,width,height,duration);
+
     }
 
     @SysLog(value = "聊天文件上传",require = true)

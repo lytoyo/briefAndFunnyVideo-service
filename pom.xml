@@ -132,6 +132,7 @@
                 <artifactId>ffmpeg-platform</artifactId>
                 <version>${ffmpeg-platform.version}</version>
             </dependency>
+
         </dependencies>
     </dependencyManagement>
 

@@ -24,9 +24,11 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
+import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,6 +75,12 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
     @Resource
     private CommentMapper commentMapper;
 
+    @Resource
+    private AttentionMapper attentionMapper;
+
+    @Resource
+    private RedisTemplate redisTemplate;
+
 
     /**
      * 博客上传
@@ -87,11 +95,11 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
         //                  2、文本可有可无，有图片文件，1~9张
         //                  3、文本可有可无，有视频文件
         Long userId = AuthContextHolder.getUserId();
-        String fileName = null;
+
         String cover = null;
         //只有文本
-        if (blog.getFileName() == null) fileName = null;
-        else {
+
+        if (blog.getFileName() != null){
             //可能是多张图片文件名称组成的文件名
             String[] fileNames = blog.getFileName().split(",");
             FileInfo fileInfo = fileMapper.selectOne(new LambdaQueryWrapper<FileInfo>().eq(FileInfo::getFileName, fileNames[0]));
@@ -116,7 +124,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
     public Result approveBlog(Long id) {
         Blog blog = this.getById(id);
         blog.setStatus(1);
-        this.uploadBlog(blog);
+        this.blogMapper.updateById(blog);
 
         //将博客上传到elasticsearch
         this.rabbitMqUtil.sendBlogToElasticsearch(RabbitMqConstant.DIRECTEXCHANGE, RabbitMqConstant.BLOG_UP_ROUTINGKEY, blog);
@@ -131,16 +139,26 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
      * @return
      */
     @Override
-    public SearchHits<Blog> keywordComplement(String keyword) {
+    public Result keywordComplement(String keyword) {
         NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
                 .withQuery(QueryBuilders.multiMatchQuery(keyword, "content", "tag"))
                 .withHighlightFields(
-                        new HighlightBuilder.Field("content").preTags("<em>").postTags("</em>"),
+                        new HighlightBuilder.Field("content").preTags("<em style='color: red;'>").postTags("</em>"),
                         new HighlightBuilder.Field("tag").preTags("<em>").postTags("</em>")
                 ).build();
+        List<BlogVo> blogVoSearchList = new ArrayList<>();
         SearchHits<Blog> result = elasticsearchRestTemplate.search(searchQuery, Blog.class);
-
-        return result;
+        if (result.getTotalHits() > 0){
+            List<SearchHit<Blog>> searchHits = result.getSearchHits();
+             blogVoSearchList = searchHits.stream().map(blogSearchHit -> {
+                Blog blog = blogSearchHit.getContent();
+                BlogVo blogVo = new BlogVo();
+                blogVo.setId(blog.getId());
+                blogVo.setContent(blogSearchHit.getHighlightField("content").get(0));
+                return blogVo;
+            }).collect(Collectors.toList());
+        }
+        return Result.success(blogVoSearchList);
     }
 
     /**
@@ -150,8 +168,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
      * @return
      */
     @Override
-    public Map<String, SearchHits> comprehensiveSearch(String keyword) {
-        HashMap<String, SearchHits> result = new HashMap<>();
+    public Result comprehensiveSearch(String keyword) {
+        HashMap<String, Object> result = new HashMap<>();
         //帖子相关
         NativeSearchQuery blogSearchQuery = new NativeSearchQueryBuilder()
                 .withQuery(QueryBuilders.multiMatchQuery(keyword, "content", "tag"))
@@ -161,17 +179,47 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
                         new HighlightBuilder.Field("tag").preTags("<em>").postTags("</em>")
                 ).build();
         SearchHits<Blog> blogResult = elasticsearchRestTemplate.search(blogSearchQuery, Blog.class);
-        //用户相关
-        NativeSearchQuery userSearchQuery = new NativeSearchQueryBuilder()
-                .withQuery(QueryBuilders.multiMatchQuery(keyword, "userName"))
-                .withPageable(PageRequest.of(0, 2))
-                .withHighlightFields(
-                        new HighlightBuilder.Field("userName").preTags("<em>").postTags("</em>"))
-                .build();
-        SearchHits<User> userResult = elasticsearchRestTemplate.search(userSearchQuery, User.class);
-        result.put("userResult", userResult);
-        result.put("blogResult", blogResult);
-        return result;
+        List<BlogVo> searchContents = new ArrayList<>();
+        if (blogResult.getTotalHits() > 0){
+            Map<Long, UserVo> userVoMap = new HashMap<>();
+            //获取用户userVo信息
+            blogResult.getSearchHits().stream().forEach(blogSearchHit -> {
+                UserVo userVo = new UserVo();
+                Long userId = blogSearchHit.getContent().getUserId();
+                if(userVoMap.get(userId) == null) {
+                    User user = this.userMapper.selectById(userId);
+                    BeanUtils.copyProperties(user,userVo);
+                    userVoMap.put(userId,userVo);
+                }
+            });
+
+            searchContents = blogResult.getSearchHits().stream().map(blogSearchHit -> {
+                BlogVo blogVo = new BlogVo();
+                Blog blog = blogSearchHit.getContent();
+                BeanUtils.copyProperties(blog, blogVo);
+                blogVo.setContent(blogSearchHit.getHighlightField("content").get(0));
+                if (blogVo.getFileType().equals("image")){
+                    String imageFileNames = Arrays.stream(blogVo.getFileName().split(",")).map(fileName -> {
+                        return this.minioProperties.getUrl() + fileName;
+                    }).collect(Collectors.joining(","));
+                    blogVo.setFileName(imageFileNames);
+                }else{
+                    blogVo.setFileName(this.minioProperties.getUrl() + blogVo.getFileName());
+                }
+                blogVo.setCover(this.minioProperties.getUrl() + blogVo.getCover());
+                UserVo userVo = userVoMap.get(blogVo.getUserId());
+
+                blogVo.setUserId(userVo.getId());
+                blogVo.setUserCategory(userVo.getCategory());
+                blogVo.setUserName(userVo.getUserName());
+                blogVo.setUserAvatar(this.minioProperties.getUrl() + userVo.getAvatar());
+                blogVo.setUserStatus(userVo.getStatus());
+
+                return blogVo;
+            }).collect(Collectors.toList());
+        }
+        result.put("searchBlogContents",searchContents);
+        return Result.success(result);
     }
 
     /**
@@ -492,7 +540,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
                 .in(!commentPageResult.getRecords().isEmpty(),Liked::getObjId,commentPageResult.getRecords().stream().map(f->{
                     return f.getId();
                 }).collect(Collectors.toList()))
-                .eq(userId != null,Liked::getLikedUserId,userId));
+                .eq(userId != null,Liked::getLikedUserId,userId)
+                .eq(Liked::getStatus,1));
         List<CommentVo> commentList = commentPageResult.getRecords().stream().map(comment -> {
             CommentVo commentVo = new CommentVo();
             commentVo.setIsPoster(false);
@@ -575,6 +624,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
         }
 
         //todo 这里后续修改为使用redis存取，定时任务修改数据库
+
+
         //增减点赞数量
         String sql = one.getStatus() == 1 ? "liked_count = liked_count + 1" : "liked_count = liked_count - 1";
         UpdateWrapper<Comment> wrapper = new UpdateWrapper<>();
@@ -660,11 +711,11 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
 
         CommentVo commentVo = new CommentVo();
         BeanUtils.copyProperties(comment,commentVo);
-        if (commentVo.getFileType().equals("image")){
+        if (commentVo.getFileType() != null && commentVo.getFileType().equals("image")){
             commentVo.setFileName(Arrays.stream(commentVo.getFileName().split(",")).map(fileName->{
                 return this.minioProperties.getUrl() + fileName;
             }).collect(Collectors.joining(",")));
-        }else if (commentVo.getFileType().equals("video")){
+        }else if (commentVo.getFileType() != null && commentVo.getFileType().equals("video")){
             commentVo.setFileName(this.minioProperties.getUrl() + commentVo.getFileName());
         }
         commentVo.setIsLiked(false);
@@ -677,6 +728,117 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
         wrapper.setSql("comment_count = comment_count + 1");
         this.update(wrapper);
         return Result.success(commentVo);
+    }
+
+    /**
+     * 根据条件查询博客列表
+     * @param current
+     * @param size
+     * @param keyword
+     * @param status
+     * @param fileType
+     * @return
+     */
+    @Override
+    public Result listBlogs(Integer current, Integer size, String keyword, Integer status, String fileType) {
+        Map<String, Object> result = new HashMap<>();
+        Page<Blog> blogPage = new Page<>(current, size);
+        Page<Blog> selectPage = this.blogMapper.selectPage(blogPage, new LambdaQueryWrapper<Blog>()
+                .eq(status != 0,Blog::getStatus, status)
+                .eq(fileType != null && !fileType.equals(""),Blog::getFileType, fileType)
+                .like(!keyword.equals("") && keyword != null, Blog::getContent, keyword));
+        List<Blog> blogList = selectPage.getRecords();
+        result.put("blogList",blogList);
+        result.put("total",selectPage.getTotal());
+        return Result.success(result);
+    }
+
+    @Override
+    public Result commentList(Integer current, Integer size, Long postId, Long commentUserId, Integer type) {
+        HashMap<String, Object> result = new HashMap<>();
+        Page<Comment> page = new Page<>(current, size);
+        Page<Comment> commentPage = this.commentMapper.selectPageByCondition(page,postId,commentUserId,type);
+        List<Comment> commentList = commentPage.getRecords();
+        result.put("commentList",commentList);
+        result.put("total",commentPage.getTotal());
+        return Result.success(result);
+    }
+
+    @Override
+    public Result commentDetail(Long id) {
+        Comment comment = this.commentMapper.selectByIdAndDeleteFlag(id);
+        CommentVo commentVo = new CommentVo();
+        BeanUtils.copyProperties(comment,commentVo);
+        User user = this.userMapper.selectById(comment.getCommentUserId());
+        UserVo userVo = new UserVo();
+        BeanUtils.copyProperties(user,userVo);
+        userVo.setAvatar(this.minioProperties.getUrl() + userVo.getAvatar());
+        commentVo.setUserVo(userVo);
+        if(commentVo.getFileType() != null && commentVo.getFileType().equals("image")){
+            String name = Arrays.stream(commentVo.getFileName().split(",")).map(fileName -> {
+                return this.minioProperties.getUrl() + fileName;
+            }).collect(Collectors.joining(","));
+            commentVo.setFileName(name);
+        }
+        else{
+            commentVo.setFileName(this.minioProperties.getUrl() + commentVo.getFileName());
+        }
+
+        return Result.success(commentVo);
+    }
+
+    @Override
+    public Result commentUpdateStatus(Comment comment) {
+        this.commentMapper.update(new UpdateWrapper<Comment>()
+                .eq("id",comment.getId())
+                .set("delete_flag",comment.getDeleteFlag()));
+        return Result.success();
+    }
+
+    @Override
+    public Result attentionPostList(Integer current, Integer size) {
+        Map<String, Object> result = new HashMap<>();
+        Long userId = AuthContextHolder.getUserId();
+        List<Long> userIdList = attentionMapper.selectList(new LambdaQueryWrapper<Attention>().eq(Attention::getFansUserId, userId)).stream().map(attention -> {
+            return attention.getUserId();
+        }).collect(Collectors.toList());
+        if (userIdList.size() == 0) {
+            result.put("total",0);
+            result.put("blogVoList",Arrays.asList());
+            return Result.success(result);
+        }
+        Page<Blog> blogPage = new Page<>(current, size);
+        Page<Blog> pageResult = this.blogMapper.selectPage(blogPage, new LambdaQueryWrapper<Blog>().eq(Blog::getStatus,1).in(Blog::getUserId, userIdList).orderByDesc(Blog::getId));
+        Map<String, User> userMap = new HashMap<>();
+        this.userMapper.selectList(new LambdaQueryWrapper<User>().in(User::getId, userIdList)).stream().forEach(user -> {
+            String id = String.valueOf(user.getId());
+            userMap.put(id,user);
+        });
+        List<BlogVo> blogVoList = pageResult.getRecords().stream().map(blog -> {
+            BlogVo blogVo = new BlogVo();
+            BeanUtils.copyProperties(blog, blogVo);
+            User user = new User();
+            User one = userMap.get(String.valueOf(blogVo.getUserId()));
+            BeanUtils.copyProperties(one,user);
+            user.setAvatar(this.minioProperties.getUrl() + user.getAvatar());
+            if (blogVo.getFileType() != null && blogVo.getFileType().equals("image")) {
+                blogVo.setFileName(Arrays.stream(blog.getFileName().split(",")).map(fileName -> {
+                    return this.minioProperties.getUrl() + fileName;
+                }).collect(Collectors.joining(",")));
+            } else {
+                blogVo.setFileName(this.minioProperties.getUrl() + blogVo.getFileName());
+            }
+            blogVo.setCover(this.minioProperties.getUrl() + blogVo.getCover());
+            blogVo.setUserStatus(user.getStatus());
+            blogVo.setUserId(user.getId());
+            blogVo.setUserAvatar(user.getAvatar());
+            blogVo.setUserName(user.getUserName());
+            blogVo.setUserCategory(user.getCategory());
+            return blogVo;
+        }).collect(Collectors.toList());
+        result.put("total",pageResult.getTotal());
+        result.put("blogVoList",blogVoList);
+        return Result.success(result);
     }
 
 }
