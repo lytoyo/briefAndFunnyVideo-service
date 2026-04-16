@@ -2,14 +2,17 @@ package com.lytoyo.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lytoyo.common.constant.RedisConstant;
 import com.lytoyo.common.domain.*;
 import com.lytoyo.common.domain.vo.BlogVo;
 import com.lytoyo.common.domain.vo.UserVo;
 import com.lytoyo.common.exception.ExceptionEnum;
 import com.lytoyo.common.properties.MinioProperties;
 import com.lytoyo.common.utils.AuthContextHolder;
+import com.lytoyo.common.utils.JwtUtil;
 import com.lytoyo.common.utils.PasswordUtil;
 import com.lytoyo.common.utils.ResultCodeEnum;
 import com.lytoyo.mapper.*;
@@ -18,6 +21,7 @@ import com.lytoyo.service.UserService;
 import io.minio.MinioClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -26,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -66,6 +71,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Resource
     private CommentMapper commentMapper;
+
+    @Resource
+    private RedisTemplate redisTemplate;
 
 
     /**
@@ -492,6 +500,37 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         boolean flag = passwordUtil.verifyPassword(user.getPassword(), one.getPassword(), one.getSalt());
         if (flag && one.getCategory() == 0) return Result.success();
         return Result.fail("该账号无权限");
+    }
+
+    @Override
+    public Result userInfo(Long userId) {
+        User user = this.userMapper.selectById(userId);
+        UserVo userVo = new UserVo();
+        userVo.setId(user.getId());
+        userVo.setUserName(user.getUserName());
+        userVo.setAvatar(this.minioProperties.getUrl() + user.getAvatar());
+        userVo.setSex(user.getSex());
+        userVo.setIntro(user.getIntro());
+        userVo.setProvince(user.getProvince());
+        return Result.success(userVo);
+    }
+
+    @Override
+    public Result saveUserInfo(User user) {
+        UpdateWrapper<User> userUpdateWrapper = new UpdateWrapper<>();
+        userUpdateWrapper.eq("id",user.getId())
+                .set("user_name",user.getUserName())
+                .set("sex",user.getSex())
+                .set("intro",user.getIntro())
+                .set("province",user.getProvince())
+                .set(user.getAvatar() != null && !user.getAvatar().equals(""),"avatar",user.getAvatar());
+        this.update(userUpdateWrapper);
+        User one = this.getById(user.getId());
+        UserVo userVo = new UserVo();
+        BeanUtils.copyProperties(one,userVo);
+        userVo.setAvatar(this.minioProperties.getUrl() + userVo.getAvatar());
+        redisTemplate.opsForValue().set(RedisConstant.USER + one.getId(),userVo,RedisConstant.USEREPASTDUE, TimeUnit.HOURS);
+        return Result.success(userVo);
     }
 
 

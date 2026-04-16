@@ -2,7 +2,7 @@ spring:
   application:
     name: baf-server-admin
   profiles:
-    active: @activatedProperties@
+    active: dev
 
 server:
   port: 8884

@@ -34,12 +34,11 @@
         <hutool.version>5.8.22</hutool.version>
         <jwt.version>0.12.6</jwt.version>
         <mail.version>1.6.2</mail.version>
-        <mybatis.version>3.0.3</mybatis.version>
+
         <minio.version>8.2.0</minio.version>
         <javacv.version>1.5.6</javacv.version>
         <ffmpeg-platform.version>4.4-1.5.6</ffmpeg-platform.version>
         <elasticsearch.version>7.15.2</elasticsearch.version>
-        <activatedProperties>dev</activatedProperties>
     </properties>
 
     <dependencyManagement>
@@ -78,11 +77,6 @@
                 <version>${hutool.version}</version>
             </dependency>
 
-            <dependency>
-                <groupId>org.mybatis.spring.boot</groupId>
-                <artifactId>mybatis-spring-boot-starter</artifactId>
-                <version>${mybatis.version}</version>
-            </dependency>
 
             <dependency>
                 <groupId>com.sun.mail</groupId>

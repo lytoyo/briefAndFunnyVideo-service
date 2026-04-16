@@ -47,4 +47,10 @@ public class SystemController {
         Result r = systemService.logoff(userId);
         return r;
     }
+
+    @SysLog(value = "修改密码")
+    @PostMapping("/modPassword")
+    public Result modPassword(@RequestBody User user){
+        return systemService.modPassword(user);
+    }
 }

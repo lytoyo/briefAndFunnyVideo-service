@@ -43,4 +43,11 @@ public interface SystemService {
      * @return
      */
     Result overview();
+
+    /**
+     * 修改密码
+     * @param user
+     * @return
+     */
+    Result modPassword(User user);
 }

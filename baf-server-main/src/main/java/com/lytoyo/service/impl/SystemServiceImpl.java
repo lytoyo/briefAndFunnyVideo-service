@@ -257,6 +257,45 @@ public class SystemServiceImpl implements SystemService {
         return Result.success(result);
     }
 
+    @Override
+    public Result modPassword(User user) {
+        String email = user.getEmail();
+        String code = (String) user.getParams().get("code");
+        String again = (String) user.getParams().get("again");
+
+        //是否缺失注册账户信息
+        if (user.getEmail() == null && user.getPassword() == null
+                && again == null && code == null){
+            return Result.fail(SystemConstant.IMFORMATIONLOSS);
+        }
+
+        //是否两次密码输入不相同
+        if (!user.getPassword().equals(again))
+            return Result.fail(SystemConstant.PASSWORDNOTSAME);
+
+        //判断邮箱格式是否正确
+        if (!user.getEmail().isEmpty()){
+            boolean matches = Pattern.matches(SystemConstant.MATCH, user.getEmail());
+            if (!matches) return Result.fail(SystemConstant.FORMATERROR);
+        }else {
+            return Result.fail(SystemConstant.EMAILISEMPTY);
+        }
+
+        //判断验证码是否过期且是否正确
+        String memoryCode = (String) redisTemplate.opsForValue().get(RedisConstant.EMAILCODE + user.getEmail());
+        if (memoryCode != null && !memoryCode.equals(code))
+            return Result.fail(SystemConstant.CODEERROR);
+
+        //判断该账户（用email来判断） 是否被封禁
+        User one = userService.getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, user.getEmail()));
+        if (null == one) return Result.fail(SystemConstant.USERUNEXIST);
+
+        String storePassword = passwordUtil.encryptPassword(user.getPassword(), one.getSalt());
+        user.setPassword(storePassword);
+        this.userMapper.updateById(user);
+        return Result.success();
+    }
+
     private long userOnlineCount(String pattern) {
         long count = 0;
         // 使用 SCAN 命令而不是 KEYS 命令（避免阻塞）

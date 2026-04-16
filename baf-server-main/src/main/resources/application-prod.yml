@@ -1,14 +1,14 @@
 spring:
   elasticsearch:
     rest:
-      uris: 192.168.200.136:9200
+      uris: ${re-url}:9200
       connection-timeout: 30s
       read-timeout: 30s
   rabbitmq:
-    host: 192.168.200.136
+    host: ${re-url}
     port: 5672
-    username: admin
-    password: admin
+    username: guest
+    password: guest
     virtual-host: /
   servlet:
     multipart:
@@ -18,17 +18,13 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password: 123456
-    url: jdbc:mysql://192.168.200.136:3306/baf?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://127.0.0.1:3306/baf?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
+      connection-test-query: SELECT 1
+      initialization-fail-timeout: 0
   redis:
-    host: 192.168.200.136
+    host: ${mmr-url}
     port: 6379
-    password: 123456
     database: 0
     lettuce:
       pool:
@@ -38,19 +34,14 @@ spring:
         max-wait: -1ms
     timeout: 3000ms
     connect-timeout: 3000ms
-  mybatis:
-    mapper-locations: classpath:mapper/*.xml
-    type-aliases-package: com.example.entity
-    configuration:
-      map-underscore-to-camel-case: true
-      log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 email:
   config:
-    from: "短趣视频团队"
+    from: "短趣视频"
     password: EYRxmzT4S6vjXUHh
     host: smtp.163.com
     port: 465
@@ -62,9 +53,20 @@ jwt:
   issuer: lytoyo
 
 minio:
-  endpoint: http://192.168.200.136:9000
+  endpoint: http://${mmr-url}:9000
   bucketName: baf
-  accessKey: vQulpsLrq2qCy5orxttx
-  secretKey: gtiiFqg3qyuYj1yU8F8zPSeozIzNWmIHt6rjzRVy
+  accessKey: JdV9xYmjrCkimUNjbdTa
+  secretKey: GsxgzgVlDfa2OoXJxdEQvtPhjP9awNiLL8XFLRzt
   secure: false
-  url: http://192.168.200.136:9000/baf/
+  url: http://${minio-url}:9000/baf/
+
+ffmpeg:
+  path: /root/middleware/ffmpeg/ffmpeg-git-amd64/ffmpeg
+
+mmr-url: 127.0.0.1
+
+minio-url: 115.191.63.22
+
+re-url: 106.12.132.206
+
+

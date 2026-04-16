@@ -1,6 +1,7 @@
 package com.lytoyo.controller.server.user;
 
 import com.lytoyo.common.domain.Result;
+import com.lytoyo.common.domain.User;
 import com.lytoyo.framework.aspectj.SysLog;
 import com.lytoyo.service.UserService;
 import org.springframework.web.bind.annotation.*;
@@ -78,5 +79,17 @@ public class ServerUserController {
     @SysLog(value = "关注其他用户",require = true)
     public Result attentionUser(@RequestParam("userId") Long userId){
         return this.userService.attentionUser(userId);
+    }
+
+    @GetMapping("/userInfo")
+    @SysLog(value = "获取用户详情")
+    public Result userInfo(@RequestParam("userId") Long userId){
+        return this.userService.userInfo(userId);
+    }
+
+    @PostMapping("/saveUserInfo")
+    @SysLog(value = "保存用户修改信息")
+    public Result saveUserInfo(@RequestBody User user){
+        return this.userService.saveUserInfo(user);
     }
 }

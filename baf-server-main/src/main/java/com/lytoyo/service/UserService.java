@@ -109,4 +109,18 @@ public interface UserService extends IService<User> {
      * @return
      */
     Result login(User user);
+
+    /**
+     * 获取用户详情
+     * @param userId
+     * @return
+     */
+    Result userInfo(Long userId);
+
+    /**
+     * 保存用户修改信息
+     * @param user
+     * @return
+     */
+    Result saveUserInfo(User user);
 }

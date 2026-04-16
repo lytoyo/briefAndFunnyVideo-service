@@ -679,6 +679,26 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
         }
     }
 
+    @Override
+    public Result userAvatar(MultipartFile file) {
+        HashMap<String, String> result = new HashMap<>();
+        String fileName = UUID.randomUUID().toString().replace("-", "") + ".jpg";
+        try {
+            this.minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(minioProperties.getBucketName())
+                    .object(fileName)
+                    .contentType("image/jpeg")
+                    .stream(file.getInputStream(),file.getSize(),-1)
+                    .build());
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        result.put("rawFileName",fileName);
+        result.put("avatar",this.minioProperties.getUrl() + fileName);
+        return Result.success(result);
+
+    }
+
     private void extractFirstFrame(File video, File cover) throws Exception {
         // 核心修复：添加 -update 1 参数
         String command = String.format("%s -loglevel error -i \"%s\" -ss 00:00:00.5 -vframes 1 -q:v 2 -update 1 \"%s\" -y",

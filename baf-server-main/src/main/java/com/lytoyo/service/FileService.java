@@ -61,4 +61,11 @@ public interface FileService extends IService<FileInfo> {
      */
     Result commentFileUpload(MultipartFile file, String suffix, Long size, String type, Integer width,
                              Integer height, BigDecimal duration) throws Exception;
+
+    /**
+     * 用户头像上传
+     * @param file
+     * @return
+     */
+    Result userAvatar(MultipartFile file);
 }

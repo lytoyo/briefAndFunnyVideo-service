@@ -69,4 +69,10 @@ public class FileController {
                                     @RequestParam(value = "duration",required = false) BigDecimal duration) throws Exception{
         return this.fileService.commentFileUpload(file,suffix,size,type,width,height,duration);
     }
+
+    @SysLog(value = "头像文件上传",require = true)
+    @PostMapping("/userAvatar")
+    public Result userAvatar(@RequestParam("file")MultipartFile file){
+        return this.fileService.userAvatar(file);
+    }
 }
