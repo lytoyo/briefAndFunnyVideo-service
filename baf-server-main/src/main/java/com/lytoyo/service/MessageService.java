@@ -34,9 +34,11 @@ public interface MessageService extends IService<Message> {
      * 根据p2pId获取聊天消息
      * @param p2pId
      * @param otherId
+     * @param current
+     * @param size
      * @return
      */
-    Result gainChatMessage(Long p2pId,Long otherId);
+    Result gainChatMessage(Long p2pId,Long otherId,Integer current,Integer size);
 
     /**
      * 上传聊天文件
@@ -55,9 +57,11 @@ public interface MessageService extends IService<Message> {
 
     /**
      * 获取历史聊天消息
-     * @param historyChatId
      * @param p2pId
+     * @param otherId
+     * @param current
+     * @param size
      * @return
      */
-    Result getHistoryChatMessage(Long historyChatId, Long p2pId,Long otherId);
+    Result getHistoryChatMessage( Long p2pId,Long otherId,Integer current,Integer size);
 }

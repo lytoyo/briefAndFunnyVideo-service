@@ -94,6 +94,7 @@ public class SystemWebsocket {
     @OnMessage
     public void onMessage(String msg, Session session) {
         System.out.println(msg);
+
         MessageVo messageVo = JSON.parseObject(msg,MessageVo.class);
         //忽略心跳包
         if (messageVo.getType().equals("heartbeat")){

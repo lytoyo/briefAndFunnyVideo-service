@@ -74,6 +74,8 @@ public class User extends BaseEntity{
     @TableField("phone")
     private String phone;
 
+    @TableField("liked")
+    private Long liked;
 
     /**
      * 状态： 0-禁用 1-启用 2-锁定

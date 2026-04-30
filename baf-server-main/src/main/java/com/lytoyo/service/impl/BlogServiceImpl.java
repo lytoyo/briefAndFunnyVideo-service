@@ -125,10 +125,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
         Blog blog = this.getById(id);
         blog.setStatus(1);
         this.blogMapper.updateById(blog);
-
         //将博客上传到elasticsearch
-        this.rabbitMqUtil.sendBlogToElasticsearch(RabbitMqConstant.DIRECTEXCHANGE, RabbitMqConstant.BLOG_UP_ROUTINGKEY, blog);
-
+        blogRepository.save(blog);
         return Result.success();
     }
 
@@ -154,7 +152,17 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
                 Blog blog = blogSearchHit.getContent();
                 BlogVo blogVo = new BlogVo();
                 blogVo.setId(blog.getId());
-                blogVo.setContent(blogSearchHit.getHighlightField("content").get(0));
+                 List<String> contentHighlight = blogSearchHit.getHighlightField("content");
+                 List<String> tagHighlight = blogSearchHit.getHighlightField("tag");
+
+                 if (contentHighlight != null && !contentHighlight.isEmpty()) {
+                     blogVo.setContent(contentHighlight.get(0));
+                 } else if (tagHighlight != null && !tagHighlight.isEmpty()) {
+                     blogVo.setContent(tagHighlight.get(0));
+                 } else {
+                     // 没有高亮时，使用原始内容兜底
+                     blogVo.setContent(blog.getContent());
+                 }
                 return blogVo;
             }).collect(Collectors.toList());
         }
@@ -197,7 +205,15 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
                 BlogVo blogVo = new BlogVo();
                 Blog blog = blogSearchHit.getContent();
                 BeanUtils.copyProperties(blog, blogVo);
-                blogVo.setContent(blogSearchHit.getHighlightField("content").get(0));
+                List<String> contentHighlight = blogSearchHit.getHighlightField("content");
+                List<String> tagHighlight = blogSearchHit.getHighlightField("tag");
+
+                if (contentHighlight != null && !contentHighlight.isEmpty()) {
+                    blogVo.setContent(contentHighlight.get(0));
+                } else {
+                    blogVo.setContent(blog.getContent());
+                }
+
                 if (blogVo.getFileType().equals("image")){
                     String imageFileNames = Arrays.stream(blogVo.getFileName().split(",")).map(fileName -> {
                         return this.minioProperties.getUrl() + fileName;
@@ -702,7 +718,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
     @Transactional
     public Result comment(Comment comment) {
         Long userId = AuthContextHolder.getUserId();
-        UserVo userVo = AuthContextHolder.getUserVo();
+        User user = this.userMapper.selectById(userId);
 
         comment.setCommentUserId(userId);
         comment.setLikedCount(0l);
@@ -722,11 +738,18 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
         Blog blog = this.getById(commentVo.getPostId());
         commentVo.setIsPoster(blog.getUserId() == userId ? true : false);
         commentVo.setChildCommentCount(0l);
-        userVo.setAvatar(this.minioProperties.getUrl() + userVo.getAvatar());
+        UserVo userVo = new UserVo();
+        BeanUtils.copyProperties(user,userVo);
+        if (userVo.getAvatar() != null) {
+            System.out.println(userVo);
+            userVo.setAvatar(this.minioProperties.getUrl() + userVo.getAvatar());
+        }
         commentVo.setUserVo(userVo);
         UpdateWrapper<Blog> wrapper = new UpdateWrapper<>();
+        wrapper.eq("id",comment.getPostId());
         wrapper.setSql("comment_count = comment_count + 1");
         this.update(wrapper);
+        System.out.println("评论内容如下："+commentVo);
         return Result.success(commentVo);
     }
 

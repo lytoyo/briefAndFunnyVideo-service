@@ -125,42 +125,53 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
     }
 
     @Override
-    public Result gainChatMessage(Long p2pId,Long otherId) {
+    public Result gainChatMessage(Long p2pId,Long otherId,Integer current,Integer size) {
         UserVo fromUserVo = AuthContextHolder.getUserVo();
-        Page<Message> messagePage = new Page<>(1, 10);
+
         QueryWrapper<Message> messageQueryWrapper = new QueryWrapper<>();
-        messageQueryWrapper.eq("p2p_id",p2pId);
+        messageQueryWrapper.eq("p2p_id", p2pId);
+        // 先按时间倒序，确保最晚发出的消息在最前面被计数
         messageQueryWrapper.orderByDesc("public_time");
-        //添加为最后十条
-        Page<Message> messagePageResult = this.messageMapper.selectPage(messagePage, messageQueryWrapper);
-        List<Message> messageList = messagePageResult.getRecords();
-        if (messageList.size() == 0) return Result.success(new ArrayList<>());
-        messageList = messageList.stream().sorted(Comparator.comparing(Message::getPublicTime)).collect(Collectors.toList());
+
+        // 【修改点2】放弃 Page 对象，改用精准的 LIMIT OFFSET 物理分页
+        // 含义：跳过前 current 条数据，获取接下来的 size 条数据
+        messageQueryWrapper.last("limit " + size + " offset " + current);
+
+        List<Message> messageList = this.messageMapper.selectList(messageQueryWrapper);
+
+        if (messageList == null || messageList.size() == 0) {
+            return Result.success(new ArrayList<>());
+        }
+
+        // 获取对方的用户信息
         UserVo toUserVo = new UserVo();
         User toUser = this.userMapper.selectById(otherId);
-        BeanUtils.copyProperties(toUser,toUserVo);
+        BeanUtils.copyProperties(toUser, toUserVo);
         fromUserVo.setAvatar(this.minioProperties.getUrl() + fromUserVo.getAvatar());
         toUserVo.setAvatar(this.minioProperties.getUrl() + toUserVo.getAvatar());
 
-        //转换为vo类并填入缺失的信息
+        // 转换为vo类并填入缺失的信息
         List<MessageVo> messageVoList = messageList.stream().map(message -> {
-            MessageVo messageVo = new MessageVo();
-            BeanUtils.copyProperties(message, messageVo);
-            ContentVo contentVo = JSON.parseObject(message.getData(), ContentVo.class);
-            if (contentVo.getFileType() != null){
-                contentVo.setCover(this.minioProperties.getUrl() + contentVo.getCover());
-                contentVo.setFileUrl(this.minioProperties.getUrl() + contentVo.getFileUrl());
-            }
-            messageVo.setData(contentVo);
-            if (messageVo.getFromUserId() == fromUserVo.getId()) {
-                messageVo.setFromUserVo(fromUserVo);
-                messageVo.setToUserVo(toUserVo);
-            } else {
-                messageVo.setFromUserVo(toUserVo);
-                messageVo.setToUserVo(fromUserVo);
-            }
-            return messageVo;
-        }).sorted(Comparator.comparing(MessageVo::getPublicTime)).collect(Collectors.toList());
+                    MessageVo messageVo = new MessageVo();
+                    BeanUtils.copyProperties(message, messageVo);
+                    ContentVo contentVo = JSON.parseObject(message.getData(), ContentVo.class);
+                    if (contentVo.getFileType() != null){
+                        contentVo.setCover(this.minioProperties.getUrl() + contentVo.getCover());
+                        contentVo.setFileUrl(this.minioProperties.getUrl() + contentVo.getFileUrl());
+                    }
+                    messageVo.setData(contentVo);
+                    if (messageVo.getFromUserId().equals(fromUserVo.getId())) {
+                        messageVo.setFromUserVo(fromUserVo);
+                        messageVo.setToUserVo(toUserVo);
+                    } else {
+                        messageVo.setFromUserVo(toUserVo);
+                        messageVo.setToUserVo(fromUserVo);
+                    }
+                    return messageVo;
+                })
+                // 【保持原代码的正序排序】确保返回给前端的列表，时间越早的越排在前面
+                .sorted(Comparator.comparing(MessageVo::getPublicTime))
+                .collect(Collectors.toList());
 
         return Result.success(messageVoList);
     }
@@ -299,41 +310,71 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         return Result.success(true);
     }
 
-
     @Override
-    public Result getHistoryChatMessage(Long historyChatId, Long p2pId,Long otherId) {
+    public Result getHistoryChatMessage(Long p2pId, Long otherId, Integer current, Integer size) {
         UserVo selfUserVo = AuthContextHolder.getUserVo();
         QueryWrapper<Message> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("p2p_id",p2pId);
-        queryWrapper.lt("id",historyChatId);
-        queryWrapper.last("limit 10");
-        queryWrapper.orderByDesc("public_time");
-        List<Message> chatMessageList = this.messageMapper.selectList(queryWrapper);
-        if (chatMessageList.size() == 0) return Result.success(new ArrayList<>());
+        queryWrapper.eq("p2p_id", p2pId);
 
+        // 【修改点1】 使用 id 倒序，这样最新的消息 id 最大。
+        //            从最新的消息往前取，OFFSET current，LIMIT size。
+        //            这样获取到的消息列表是按 ID 降序排列的 (即最新的消息在前面)。
+        queryWrapper.orderByDesc("id");
+
+        // 【修改点2】 实现物理分页：跳过前 current 条数据，获取接下来的 size 条数据
+        // 注意：这里的 current 对应 SQL 的 OFFSET，size 对应 SQL 的 LIMIT
+        // 第一次请求 current=0, size=10 -> limit 10 offset 0
+        // 第二次请求 current=10, size=10 -> limit 10 offset 10
+        queryWrapper.last("limit " + size + " offset " + current);
+
+        List<Message> chatMessageList = this.messageMapper.selectList(queryWrapper);
+
+        if (chatMessageList == null || chatMessageList.isEmpty()) {
+            return Result.success(new ArrayList<>());
+        }
+
+        // 获取当前用户 (selfUserVo) 和对方用户信息 (otherUserVo)
         User otherUser = this.userMapper.selectById(otherId);
         UserVo otherUserVo = new UserVo();
-        BeanUtils.copyProperties(otherUser,otherUserVo);
-        otherUserVo.setAvatar(this.minioProperties.getUrl() + otherUserVo.getAvatar());
+        // 检查 otherUser 是否为空，避免空指针
+        if (otherUser != null) {
+            BeanUtils.copyProperties(otherUser, otherUserVo);
+            otherUserVo.setAvatar(this.minioProperties.getUrl() + otherUserVo.getAvatar());
+        }
+
+        // 转换为 MessageVo 并填充用户信息
         List<MessageVo> messageVoList = chatMessageList.stream().map(message -> {
-            MessageVo messageVo = new MessageVo();
-            ContentVo contentVo = new ContentVo();
-            BeanUtils.copyProperties(message, messageVo);
-            contentVo = JSON.parseObject(message.getData(), ContentVo.class);
-            if (contentVo.getFileType() != null) {
-                contentVo.setFileUrl(this.minioProperties.getUrl() + contentVo.getFileUrl());
-                contentVo.setCover(this.minioProperties.getUrl() + contentVo.getCover());
-            }
-            messageVo.setData(contentVo);
-            if (messageVo.getFromUserId() == selfUserVo.getId()) {
-                messageVo.setFromUserVo(selfUserVo);
-                messageVo.setToUserVo(otherUserVo);
-            } else {
-                messageVo.setFromUserVo(otherUserVo);
-                messageVo.setToUserVo(selfUserVo);
-            }
-            return messageVo;
-        }).sorted(Comparator.comparing(MessageVo::getId)).collect(Collectors.toList());
+                    MessageVo messageVo = new MessageVo();
+                    ContentVo contentVo = new ContentVo();
+                    BeanUtils.copyProperties(message, messageVo);
+                    contentVo = JSON.parseObject(message.getData(), ContentVo.class);
+
+                    if (contentVo != null && contentVo.getFileType() != null) {
+                        contentVo.setFileUrl(this.minioProperties.getUrl() + contentVo.getFileUrl());
+                        contentVo.setCover(this.minioProperties.getUrl() + contentVo.getCover());
+                    }
+                    messageVo.setData(contentVo);
+
+                    // 根据消息的发送者填充 FromUserVo 和 ToUserVo
+                    // 这里需要确保 fromUserVo 和 toUserVo 在方法外部或循环内能正确获取到
+                    // 从当前登录用户和 otherUser 中判断消息的发送方和接收方
+                    if (messageVo.getFromUserId().equals(selfUserVo.getId())) {
+                        messageVo.setFromUserVo(selfUserVo);
+                        messageVo.setToUserVo(otherUserVo);
+                    } else {
+                        messageVo.setFromUserVo(otherUserVo);
+                        messageVo.setToUserVo(selfUserVo);
+                    }
+                    return messageVo;
+                })
+                // 【修改点3】对消息列表进行排序。
+                //    由于数据库是按 ID 倒序查询的，所以默认 messageVoList 是从新到旧的顺序。
+                //    为了保持前端 unshift 时，历史消息按时间从旧到新排列，这里可以：
+                //    1. 不排序，让前端收到从新到旧的列表后，自己 `reverse()` 再 `unshift()`。
+                //    2. 在后端进行 `reverse()`，让返回的列表就是从旧到新。
+                //    这里我们选择在后端进行 `reverse()` 操作，保持返回数据逻辑一致，以便前端直接 unshift。
+                .sorted(Comparator.comparing(MessageVo::getId)) // 再次按ID升序排序，使最旧的消息在前面
+                .collect(Collectors.toList());
 
         return Result.success(messageVoList);
     }

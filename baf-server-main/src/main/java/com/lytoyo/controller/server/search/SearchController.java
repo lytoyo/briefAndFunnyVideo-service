@@ -39,7 +39,6 @@ public class SearchController {
     @GetMapping("/comprehensiveSearch")
     public Result comprehensiveSearch(@RequestParam("keyword")String keyword){
         return blogService.comprehensiveSearch(keyword);
-
     }
 
     @SysLog(value = "关键词帖子分页查询",require = true,needLogin = false)

@@ -29,9 +29,7 @@ public class UserMessageLister {
     @RabbitListener(bindings = @QueueBinding(value = @Queue(durable = "true",value = "queue.baf.up.elasticsearch.user"),
     exchange = @Exchange(value = "exchange.direct.baf"),key = {"routing.baf.up.user"}))
     public void userUpElasticsearchProcessMessage(User user, Message message, Channel channel){
-        UserVo userVo = new UserVo();
-        BeanUtils.copyProperties(user,userVo);
-        userVoRepository.save(userVo);
+
     }
 
     @RabbitListener(bindings = @QueueBinding(value = @Queue(durable = "true",value = "queue.baf.mod.user"),

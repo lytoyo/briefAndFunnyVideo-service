@@ -95,6 +95,7 @@ public class WebsocketUtil {
         message.setData(JSON.toJSONString(messageVo.getData()));
 
         //存储消息
+        message.setId(null);
         WebsocketUtil.messageService.save(message);
         messageVo.setId(message.getId());
 
@@ -115,9 +116,20 @@ public class WebsocketUtil {
         Date downlineTime = user.getDownlineTime();
         //每次重新连接websocket都要比较消息队列表里发布时间与用户最近离线时间
         //拉取前面未登录而错过的消息并剔除关注推送消息
-        List<Message> messagesList = WebsocketUtil.messageMapper.selectList(new LambdaQueryWrapper<Message>()
-                .in(Message::getToUserId, user.getId(),0,-1).ge(Message::getPublicTime, downlineTime));
-        if (messagesList.size() == 0) return;
+        LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<Message>()
+                .in(Message::getToUserId, user.getId(), 0, -1)
+                .orderByDesc(Message::getPublicTime)
+                .last("limit 20");
+
+        // 只有当下线时间不为空时，才增加时间限制条件
+        if (downlineTime != null) {
+            wrapper.gt(Message::getPublicTime, downlineTime); // 【修改点 2：建议用 gt (大于) 替代 ge (大于等于)，防止刚好踩点重复推】
+        }
+
+        List<Message> messagesList = WebsocketUtil.messageMapper.selectList(wrapper);
+
+        if (messagesList == null || messagesList.size() == 0) return;
+        Collections.reverse(messagesList);
         //获取信息中的idSet集合
         HashSet<Long> userIdSet = new HashSet<>();
         messagesList.stream().forEach(message -> {

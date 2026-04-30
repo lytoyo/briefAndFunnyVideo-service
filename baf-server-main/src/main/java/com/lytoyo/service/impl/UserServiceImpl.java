@@ -26,10 +26,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.xml.crypto.Data;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -112,38 +109,82 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public Result getStatus(Long userId) {
         HashMap<String, Object> result = new HashMap<>();
+
+        // 当前登录用户ID
         Long selfId = AuthContextHolder.getUserId();
-        //查询用户获赞信息并整理
-        Integer likedReduce = blogMapper.selectList(new LambdaQueryWrapper<Blog>()
-        .eq(Blog::getUserId, userId)
-        .eq(Blog::getStatus, 1))
-        .stream().map(blog -> {
-              return blog.getLikeCount();
-        }).reduce(Math.toIntExact(this.likedMapper.selectCount(new LambdaQueryWrapper<Liked>().eq(Liked::getType, 2)
-              .in(Liked::getObjId, this.commentMapper.selectList(new LambdaQueryWrapper<Comment>()
-              .eq(Comment::getCommentUserId, userId))
-                      .stream().map(comment -> {
-                            return comment.getId();
-                      }).collect(Collectors.toList())))), Integer::sum);
-        //查询用户关注列表并整理
-        Integer attentionReduce = attentionMapper.selectCount(new LambdaQueryWrapper<Attention>()
+
+        // 1. 查询目标用户是否存在
+        User user = userMapper.selectById(userId);
+        // 2. 查询用户获赞数
+        Integer likedCount = 0;
+
+        List<Blog> blogList = blogMapper.selectList(new LambdaQueryWrapper<Blog>()
+                .eq(Blog::getUserId, userId)
+                .eq(Blog::getStatus, 1));
+
+        if (blogList != null && !blogList.isEmpty()) {
+            likedCount = blogList.stream()
+                    .map(Blog::getLikeCount)
+                    .filter(Objects::nonNull)
+                    .reduce(0, Integer::sum);
+        }
+
+        // 如果你还想统计评论相关点赞，可保留下面这段
+        // 这里按你原来的思路：查出该用户的评论id，再去统计点赞数
+        List<Comment> commentList = commentMapper.selectList(new LambdaQueryWrapper<Comment>()
+                .eq(Comment::getCommentUserId, userId));
+
+        if (commentList != null && !commentList.isEmpty()) {
+            List<Long> commentIds = commentList.stream()
+                    .map(Comment::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            if (!commentIds.isEmpty()) {
+                Long commentLikedCount = likedMapper.selectCount(new LambdaQueryWrapper<Liked>()
+                        .eq(Liked::getType, 2)
+                        .in(Liked::getObjId, commentIds));
+
+                if (commentLikedCount != null) {
+                    likedCount += commentLikedCount.intValue();
+                }
+            }
+        }
+
+        // 3. 查询关注数
+        Long attentionCountLong = attentionMapper.selectCount(new LambdaQueryWrapper<Attention>()
                 .eq(Attention::getFansUserId, userId)
-                .eq(Attention::getStatus, 1)).intValue();
-        //查询用户粉丝列表并整理
-        Integer fansReduce = attentionMapper.selectCount(new LambdaQueryWrapper<Attention>()
-                .eq(Attention::getUserId, userId)
-                .eq(Attention::getStatus, 1)).intValue();
-        //查询用户状态
-        Integer userStatus = userMapper.selectById(userId).getStatus();
-        Attention attention = this.attentionMapper.selectOne(new LambdaQueryWrapper<Attention>()
-                .eq( Attention::getFansUserId, selfId != null ? selfId : -1)
+                .eq(Attention::getStatus, 1));
+        Integer attentionCount = attentionCountLong == null ? 0 : attentionCountLong.intValue();
+
+        // 4. 查询粉丝数
+        Long fansCountLong = attentionMapper.selectCount(new LambdaQueryWrapper<Attention>()
                 .eq(Attention::getUserId, userId)
                 .eq(Attention::getStatus, 1));
-        result.put("isAttention",null != attention ? true : false);
-        result.put("likedCount", likedReduce);
-        result.put("attentionCount", attentionReduce);
-        result.put("fansCount", fansReduce);
+        Integer fansCount = fansCountLong == null ? 0 : fansCountLong.intValue();
+
+        // 5. 查询用户状态
+        Integer userStatus = user.getStatus();
+
+        // 6. 查询当前登录用户是否关注了该用户
+        boolean isAttention = false;
+        if (selfId != null) {
+            List<Attention> attentionList = attentionMapper.selectList(new LambdaQueryWrapper<Attention>()
+                    .eq(Attention::getFansUserId, selfId)
+                    .eq(Attention::getUserId, userId)
+                    .eq(Attention::getStatus, 1)
+                    .last("limit 1"));
+
+            isAttention = attentionList != null && !attentionList.isEmpty();
+        }
+
+        // 7. 封装返回结果
+        result.put("isAttention", isAttention);
+        result.put("likedCount", likedCount);
+        result.put("attentionCount", attentionCount);
+        result.put("fansCount", fansCount);
         result.put("userStatus", userStatus);
+
         return Result.success(result);
     }
 
@@ -508,7 +549,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         UserVo userVo = new UserVo();
         userVo.setId(user.getId());
         userVo.setUserName(user.getUserName());
-        userVo.setAvatar(this.minioProperties.getUrl() + user.getAvatar());
+        if(user.getAvatar() != null){
+            userVo.setAvatar(this.minioProperties.getUrl() + user.getAvatar());
+        }
         userVo.setSex(user.getSex());
         userVo.setIntro(user.getIntro());
         userVo.setProvince(user.getProvince());

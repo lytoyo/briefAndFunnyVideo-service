@@ -483,30 +483,127 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
      * 上传简单文件
      * @return
      */
+//    @Transactional(rollbackFor = Exception.class)
+//    @Override
+//    public Result smallFileUpload(MultipartFile file, String md5, String suffix, Long size,
+//                                   String type, Integer width, Integer height, BigDecimal duration) throws Exception {
+//
+//        File tempCover = null;
+//        String videoId = UUID.randomUUID().toString().replace("-","");
+//        FileInfo fileInfo = new FileInfo();
+//        try{
+//            if ("video".equals(type)){
+//                File tempVideo = File.createTempFile("video-", suffix);
+//                tempCover = new File(tempVideo.getParent(),videoId + ".jpg");
+//
+//                //保存文件到临时位置
+//                file.transferTo(tempVideo);
+//
+//                extractFirstFrame(tempVideo,tempCover);
+//
+//                // 验证封面生成
+//                if (!tempCover.exists() || tempCover.length() == 0) {
+//                    throw new RuntimeException("封面生成失败");
+//                }
+//
+//                // 修复：重新从临时文件读取流，而不是从MultipartFile
+//                try (InputStream videoStream = new FileInputStream(tempVideo)) {
+//                    this.minioClient.putObject(PutObjectArgs.builder()
+//                            .bucket(this.minioProperties.getBucketName())
+//                            .object(videoId + suffix)
+//                            .stream(videoStream, tempVideo.length(), -1)
+//                            .build());
+//                }
+//
+//                // 清理临时视频文件
+//                tempVideo.delete();
+//            }else {
+//                // 修复：图片直接上传，只能读取一次流
+//                InputStream inputStream = file.getInputStream();
+//                this.minioClient.putObject(PutObjectArgs.builder()
+//                        .bucket(this.minioProperties.getBucketName())
+//                        .object(videoId + suffix)
+//                        .contentType("image/jpeg")
+//                        .stream(inputStream, file.getSize(), -1)
+//                        .build());
+//                inputStream.close();
+//            }
+//            String cover = null;
+//            // 将截取到的图片上传到minio
+//            if (tempCover != null && tempCover.exists() && tempCover.length() > 0) {
+//                cover = videoId + ".jpg";
+//                try (InputStream coverStream = Files.newInputStream(tempCover.toPath())) {
+//                    this.minioClient.putObject(PutObjectArgs.builder()
+//                            .bucket(minioProperties.getBucketName())
+//                            .object(cover)
+//                            .contentType("image/jpeg")
+//                            .stream(coverStream, tempCover.length(), -1)
+//                            .build());
+//                }
+//
+//                // 清理临时封面文件
+//                tempCover.delete();
+//            }
+//            Long userId = AuthContextHolder.getUserId();
+//            if (cover != null) {
+//                fileInfo.setCover(cover);
+//            }
+//            String fileName = videoId + suffix;
+//            fileInfo.setFileName(videoId + suffix)
+//                    .setUserId(userId)
+//                    .setSuffix(suffix)
+//                    .setSize(size)
+//                    .setType(type)
+//                    .setDuration(duration)
+//                    .setWidth(width)
+//                    .setHeight(height);
+//            //保存文件信息
+//            this.save(fileInfo);
+//            return Result.success(fileName);
+//        }catch (Exception e){
+//            e.printStackTrace();
+//            throw e;
+//        }finally {
+//            tempCover.delete();
+//        }
+//    }
+
     @Transactional(rollbackFor = Exception.class)
     @Override
     public Result smallFileUpload(MultipartFile file, String md5, String suffix, Long size,
-                                   String type, Integer width, Integer height, BigDecimal duration) throws Exception {
+                                  String type, Integer width, Integer height, BigDecimal duration) throws Exception {
 
         File tempCover = null;
+        File tempVideo = null;  // 需要单独声明，以便在finally中清理
         String videoId = UUID.randomUUID().toString().replace("-","");
         FileInfo fileInfo = new FileInfo();
-        try{
-            if ("video".equals(type)){
-                File tempVideo = File.createTempFile("video-", suffix);
-                tempCover = new File(tempVideo.getParent(),videoId + ".jpg");
 
-                //保存文件到临时位置
+        try {
+            if ("video".equals(type)){
+                tempVideo = File.createTempFile("video-", suffix);
+                tempCover = new File(tempVideo.getParent(), videoId + ".jpg");
+
+                // 保存文件到临时位置
                 file.transferTo(tempVideo);
 
-                extractFirstFrame(tempVideo,tempCover);
+                // 验证文件保存成功
+                if (!tempVideo.exists() || tempVideo.length() == 0) {
+                    throw new RuntimeException("视频文件保存失败");
+                }
+
+                System.out.println("视频文件保存到: " + tempVideo.getAbsolutePath());
+                System.out.println("文件大小: " + tempVideo.length() + " bytes");
+
+                // 提取封面
+                extractFirstFrame(tempVideo, tempCover);
 
                 // 验证封面生成
                 if (!tempCover.exists() || tempCover.length() == 0) {
                     throw new RuntimeException("封面生成失败");
                 }
+                System.out.println("封面文件生成: " + tempCover.getAbsolutePath() + ", 大小: " + tempCover.length());
 
-                // 修复：重新从临时文件读取流，而不是从MultipartFile
+                // 上传视频到minio
                 try (InputStream videoStream = new FileInputStream(tempVideo)) {
                     this.minioClient.putObject(PutObjectArgs.builder()
                             .bucket(this.minioProperties.getBucketName())
@@ -515,10 +612,10 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
                             .build());
                 }
 
-                // 清理临时视频文件
-                tempVideo.delete();
-            }else {
-                // 修复：图片直接上传，只能读取一次流
+                // 注意：这里不删除 tempVideo，在 finally 块中统一删除
+
+            } else {
+                // 图片直接上传
                 InputStream inputStream = file.getInputStream();
                 this.minioClient.putObject(PutObjectArgs.builder()
                         .bucket(this.minioProperties.getBucketName())
@@ -528,6 +625,7 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
                         .build());
                 inputStream.close();
             }
+
             String cover = null;
             // 将截取到的图片上传到minio
             if (tempCover != null && tempCover.exists() && tempCover.length() > 0) {
@@ -540,10 +638,9 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
                             .stream(coverStream, tempCover.length(), -1)
                             .build());
                 }
-
-                // 清理临时封面文件
-                tempCover.delete();
+                // 封面文件上传完成后，在 finally 中删除
             }
+
             Long userId = AuthContextHolder.getUserId();
             if (cover != null) {
                 fileInfo.setCover(cover);
@@ -557,15 +654,90 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
                     .setDuration(duration)
                     .setWidth(width)
                     .setHeight(height);
-            //保存文件信息
+
+            // 保存文件信息
             this.save(fileInfo);
             return Result.success(fileName);
-        }catch (Exception e){
+
+        } catch (Exception e) {
             e.printStackTrace();
             throw e;
-        }finally {
-            tempCover.delete();
+        } finally {
+            // 统一清理临时文件
+            if (tempVideo != null && tempVideo.exists()) {
+                try {
+                    boolean deleted = tempVideo.delete();
+                    System.out.println("清理视频临时文件: " + tempVideo.getAbsolutePath() + " -> " + deleted);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            if (tempCover != null && tempCover.exists()) {
+                try {
+                    boolean deleted = tempCover.delete();
+                    System.out.println("清理封面临时文件: " + tempCover.getAbsolutePath() + " -> " + deleted);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
         }
+    }
+
+    private void extractFirstFrame(File video, File cover) throws Exception {
+        // 移除不兼容的 -update 1 参数
+        String[] command = {
+                ffmpegPath,
+                "-loglevel", "info",  // 改为info查看更多信息
+                "-i", video.getAbsolutePath(),
+                "-ss", "1",           // 改为1秒，更稳定
+                "-vframes", "1",
+                "-q:v", "2",
+                cover.getAbsolutePath(),
+                "-y"
+        };
+
+        System.out.println("FFmpeg命令: " + String.join(" ", command));
+
+        // 使用ProcessBuilder而不是Runtime.exec
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.redirectErrorStream(true);  // 合并标准输出和错误输出
+
+        Process process = processBuilder.start();
+
+        // 必须消费输出流，否则FFmpeg会阻塞
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+                System.out.println("FFmpeg输出: " + line);
+            }
+        }
+
+        // 等待进程完成
+        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+
+        if (!finished) {
+            process.destroyForcibly();
+            throw new RuntimeException("FFmpeg处理超时");
+        }
+
+        int exitCode = process.waitFor();  // 再次获取退出码
+
+        if (exitCode != 0) {
+            System.err.println("FFmpeg错误输出: " + output.toString());
+            throw new RuntimeException("FFmpeg执行失败，退出码: " + exitCode);
+        }
+
+        // 等待文件写入
+        Thread.sleep(200);
+
+        if (!cover.exists() || cover.length() == 0) {
+            throw new RuntimeException("封面文件未生成: " + cover.getAbsolutePath());
+        }
+
+        System.out.println("封面文件生成成功，大小: " + cover.length() + " bytes");
     }
 
     /**
@@ -699,38 +871,38 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileInfo> implement
 
     }
 
-    private void extractFirstFrame(File video, File cover) throws Exception {
-        // 核心修复：添加 -update 1 参数
-        String command = String.format("%s -loglevel error -i \"%s\" -ss 00:00:00.5 -vframes 1 -q:v 2 -update 1 \"%s\" -y",
-                ffmpegPath, video.getAbsolutePath(), cover.getAbsolutePath());
-
-        System.out.println("FFmpeg命令: " + command);
-
-        Process process = Runtime.getRuntime().exec(command);
-
-        // 处理输出流
-        handleProcessStreams(process);
-
-        // 等待进程完成
-        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
-
-        if (!finished) {
-            process.destroyForcibly();
-            throw new RuntimeException("FFmpeg处理超时");
-        }
-
-        int exitCode = process.exitValue();
-        if (exitCode != 0) {
-            throw new RuntimeException("FFmpeg执行失败，退出码: " + exitCode);
-        }
-
-        // 等待文件写入
-        Thread.sleep(200);
-
-        if (!cover.exists()) {
-            throw new RuntimeException("封面文件未生成: " + cover.getAbsolutePath());
-        }
-    }
+//    private void extractFirstFrame(File video, File cover) throws Exception {
+//        // 核心修复：添加 -update 1 参数
+//        String command = String.format("%s -loglevel error -i \"%s\" -ss 00:00:00.5 -vframes 1 -q:v 2 -update 1 \"%s\" -y",
+//                ffmpegPath, video.getAbsolutePath(), cover.getAbsolutePath());
+//
+//        System.out.println("FFmpeg命令: " + command);
+//
+//        Process process = Runtime.getRuntime().exec(command);
+//
+//        // 处理输出流
+//        handleProcessStreams(process);
+//
+//        // 等待进程完成
+//        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+//
+//        if (!finished) {
+//            process.destroyForcibly();
+//            throw new RuntimeException("FFmpeg处理超时");
+//        }
+//
+//        int exitCode = process.exitValue();
+//        if (exitCode != 0) {
+//            throw new RuntimeException("FFmpeg执行失败，退出码: " + exitCode);
+//        }
+//
+//        // 等待文件写入
+//        Thread.sleep(200);
+//
+//        if (!cover.exists()) {
+//            throw new RuntimeException("封面文件未生成: " + cover.getAbsolutePath());
+//        }
+//    }
 
     private void handleProcessStreams(Process process) {
         // 处理标准输出

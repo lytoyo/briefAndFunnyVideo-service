@@ -23,12 +23,14 @@ import com.lytoyo.common.utils.RabbitMqUtil;
 import com.lytoyo.mapper.BlogMapper;
 import com.lytoyo.mapper.CommentMapper;
 import com.lytoyo.mapper.UserMapper;
+import com.lytoyo.repository.UserVoRepository;
 import com.lytoyo.service.BlogService;
 import com.lytoyo.service.CommentService;
 import com.lytoyo.service.SystemService;
 import com.lytoyo.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.Cursor;
@@ -89,6 +91,9 @@ public class SystemServiceImpl implements SystemService {
     @Resource
     private CommentMapper commentMapper;
 
+    @Resource
+    private UserVoRepository userVoRepository;
+
     /**
      * 获取邮箱验证码
      * @param email
@@ -99,9 +104,9 @@ public class SystemServiceImpl implements SystemService {
         //验证邮箱格式
         if ((email != null) && (!email.isEmpty())){
             boolean matches = Pattern.matches(SystemConstant.MATCH, email);
-            if (!matches) return Result.fail(SystemConstant.FORMATERROR);
+            if (!matches) return Result.fail(301,SystemConstant.FORMATERROR);
         }else {
-            return Result.fail(SystemConstant.EMAILISEMPTY);
+            return Result.fail(301,SystemConstant.EMAILISEMPTY);
         }
         //生成6位随机数字验证码
         String random = CodeUtil.generateSixDigitCode(true);
@@ -132,30 +137,30 @@ public class SystemServiceImpl implements SystemService {
         //是否缺失注册账户信息
         if (user.getEmail() == null && user.getPassword() == null
         && again == null && code == null){
-            return Result.fail(SystemConstant.IMFORMATIONLOSS);
+            return Result.fail(301,SystemConstant.IMFORMATIONLOSS);
         }
 
         //是否两次密码输入不相同
         if (!user.getPassword().equals(again))
-            return Result.fail(SystemConstant.PASSWORDNOTSAME);
+            return Result.fail(301,SystemConstant.PASSWORDNOTSAME);
 
         //判断邮箱格式是否正确
         if (!user.getEmail().isEmpty()){
             boolean matches = Pattern.matches(SystemConstant.MATCH, user.getEmail());
-            if (!matches) return Result.fail(SystemConstant.FORMATERROR);
+            if (!matches) return Result.fail(301,SystemConstant.FORMATERROR);
         }else {
-            return Result.fail(SystemConstant.EMAILISEMPTY);
+            return Result.fail(301,SystemConstant.EMAILISEMPTY);
         }
 
         //判断验证码是否过期且是否正确
         String memoryCode = (String) redisTemplate.opsForValue().get(RedisConstant.EMAILCODE + user.getEmail());
         if (memoryCode != null && !memoryCode.equals(code))
-            return Result.fail(SystemConstant.CODEERROR);
+            return Result.fail(301,SystemConstant.CODEERROR);
 
         //判断是否已有该账户（用email来判断） 是否被封禁
         User one = userService.getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, user.getEmail()));
-        if (null != one) return Result.fail(SystemConstant.USEREXIST);
-        else if (one.getStatus() == 2) return Result.fail(SystemConstant.ACCOUNTBANNED);
+        if (null != one) return Result.fail(301,SystemConstant.USEREXIST);
+
 
         //生成盐值、密码加密
         String salt = passwordUtil.generateSalt();
@@ -165,11 +170,14 @@ public class SystemServiceImpl implements SystemService {
             .setCategory(2)
             .setUserName(SystemConstant.FUNNYNAME+code)
             .setSex(1)
-            .setStatus(1);
+            .setStatus(1)
+                .setLiked(0l);
         //数据插入
         this.userService.save(user);
         //用户信息异步上传elasticsearch
-        rabbitMqUtil.sendUserToElasticsearch(RabbitMqConstant.DIRECTEXCHANGE,RabbitMqConstant.USER_UP_ROUTINGKEY,user);
+        UserVo userVo = new UserVo();
+        BeanUtils.copyProperties(user,userVo);
+        userVoRepository.save(userVo);
         return Result.success();
     }
 
@@ -181,26 +189,28 @@ public class SystemServiceImpl implements SystemService {
     @Override
     public Result login(User user) {
         //检查登录信息是否缺失
-        if (user.getEmail() == null && user.getPassword() == null) return Result.fail(SystemConstant.LOGINIMFORMATIONLOSS);
+        if (user.getEmail() == null && user.getPassword() == null) return Result.fail(301,SystemConstant.LOGINIMFORMATIONLOSS);
 
         //检查邮箱格式是否正确
         if (!user.getEmail().isEmpty()){
             boolean matches = Pattern.matches(SystemConstant.MATCH, user.getEmail());
-            if (!matches) return Result.fail(SystemConstant.FORMATERROR);
+            if (!matches) return Result.fail(301,SystemConstant.FORMATERROR);
         }else {
-            return Result.fail(SystemConstant.EMAILISEMPTY);
+            return Result.fail(301,SystemConstant.EMAILISEMPTY);
         }
 
         //通过email去获取到用户并校验密码是否正确
         User one = this.userService.getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, user.getEmail()));
-        if (null == one) return Result.fail(SystemConstant.USERUNEXIST);
+        if (null == one) return Result.fail(301,SystemConstant.USERUNEXIST);
         boolean exist = passwordUtil.verifyPassword(user.getPassword(), one.getPassword(), one.getSalt());
-        if (!exist) return Result.fail(SystemConstant.PASSWORDERROR);
+        if (!exist) return Result.fail(301,SystemConstant.PASSWORDERROR);
 
         //将用户基本信息存入redis，时效1小时
         UserVo userVo = new UserVo();
         BeanUtil.copyProperties(one,userVo);
-        userVo.setAvatar(minioProperties.getUrl() + userVo.getAvatar());
+        if (userVo.getAvatar() != null){
+            userVo.setAvatar(minioProperties.getUrl() + userVo.getAvatar());
+        }
         redisTemplate.opsForValue().set(RedisConstant.USER + one.getId(),userVo,RedisConstant.USEREPASTDUE,TimeUnit.HOURS);
         //将id使用token工具类生成token
         String token = JwtUtil.geneJsonWebToken(one.getId());
@@ -266,29 +276,29 @@ public class SystemServiceImpl implements SystemService {
         //是否缺失注册账户信息
         if (user.getEmail() == null && user.getPassword() == null
                 && again == null && code == null){
-            return Result.fail(SystemConstant.IMFORMATIONLOSS);
+            return Result.fail(301,SystemConstant.IMFORMATIONLOSS);
         }
 
         //是否两次密码输入不相同
         if (!user.getPassword().equals(again))
-            return Result.fail(SystemConstant.PASSWORDNOTSAME);
+            return Result.fail(301,SystemConstant.PASSWORDNOTSAME);
 
         //判断邮箱格式是否正确
         if (!user.getEmail().isEmpty()){
             boolean matches = Pattern.matches(SystemConstant.MATCH, user.getEmail());
-            if (!matches) return Result.fail(SystemConstant.FORMATERROR);
+            if (!matches) return Result.fail(301,SystemConstant.FORMATERROR);
         }else {
-            return Result.fail(SystemConstant.EMAILISEMPTY);
+            return Result.fail(301,SystemConstant.EMAILISEMPTY);
         }
 
         //判断验证码是否过期且是否正确
         String memoryCode = (String) redisTemplate.opsForValue().get(RedisConstant.EMAILCODE + user.getEmail());
         if (memoryCode != null && !memoryCode.equals(code))
-            return Result.fail(SystemConstant.CODEERROR);
+            return Result.fail(301,SystemConstant.CODEERROR);
 
         //判断该账户（用email来判断） 是否被封禁
         User one = userService.getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, user.getEmail()));
-        if (null == one) return Result.fail(SystemConstant.USERUNEXIST);
+        if (null == one) return Result.fail(301,SystemConstant.USERUNEXIST);
 
         String storePassword = passwordUtil.encryptPassword(user.getPassword(), one.getSalt());
         user.setPassword(storePassword);

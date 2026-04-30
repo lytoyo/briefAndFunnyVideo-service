@@ -38,8 +38,9 @@ public class MessageController {
 
     @SysLog(value = "获取聊天消息")
     @GetMapping("/gainChatMessage")
-    public Result gainChatMessage(@RequestParam("p2pId")Long p2pId,@RequestParam("otherId")Long otherId){
-        return messageService.gainChatMessage(p2pId,otherId);
+    public Result gainChatMessage(@RequestParam("p2pId")Long p2pId,@RequestParam("otherId")Long otherId,
+                                  @RequestParam("current")Integer current,@RequestParam("size")Integer size){
+        return messageService.gainChatMessage(p2pId,otherId,current,size);
     }
 
     @SysLog(value = "上传聊天文件")
@@ -55,8 +56,8 @@ public class MessageController {
 
     @SysLog(value = "获取历史聊天记录")
     @GetMapping("/getHistoryChatMessage")
-    public Result getHistoryChatMessage(@RequestParam("historyChatId")Long historyChatId,@RequestParam("p2pId")Long p2pId,
-                                        @RequestParam("otherId")Long otherId){
-        return messageService.getHistoryChatMessage(historyChatId,p2pId,otherId);
+    public Result getHistoryChatMessage(@RequestParam("p2pId")Long p2pId,@RequestParam("otherId")Long otherId,
+                                        @RequestParam("current")Integer current,@RequestParam("size")Integer size){
+        return messageService.getHistoryChatMessage(p2pId,otherId,current,size);
     }
 }
